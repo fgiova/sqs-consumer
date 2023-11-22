@@ -4,6 +4,7 @@ export type HookName = "onPoll" |
 	"onHandlerTimeout" |
 	"onHandlerError" |
 	"onSuccess" |
+	"onError" |
 	"onSQSError";
 
 export class Hooks {
@@ -14,7 +15,9 @@ export class Hooks {
 		onHandlerTimeout: Symbol("handlerTimeout"),
 		onHandlerError: Symbol("handlerError"),
 		onSuccess: Symbol("success"),
+		onError: Symbol("error"),
 		onSQSError: Symbol("sqsError"),
+
 	}
 	private hooks: Record<symbol, Function[]>;
 
@@ -26,6 +29,7 @@ export class Hooks {
 			[this.hookSymbols.onHandlerTimeout]: [],
 			[this.hookSymbols.onHandlerError]: [],
 			[this.hookSymbols.onSuccess]: [],
+			[this.hookSymbols.onError]: [],
 			[this.hookSymbols.onSQSError]: [],
 		};
 	}
