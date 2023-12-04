@@ -3,76 +3,90 @@ import type {Pool} from "undici";
 import {MiniSQSClient, Message} from "@fgiova/mini-sqs-client";
 import {HookName, Hooks} from "./hooks";
 import {TimeoutError} from "./errors";
+import { setTimeout as setTimeoutAsync } from "timers/promises";
 import pMap from "p-map";
+import {Logger} from "./logger";
+
+type HandlerOptions = {
+	deleteMessage?: boolean,
+	extendVisibilityTimeout?: boolean,
+	executionTimeout?: number,
+	parallelExecution?: boolean,
+};
+
+type ClientOptions = {
+	sqsClient?: MiniSQSClient,
+	endpoint?: string,
+	undiciOptions?: Pool.Options,
+	signer?: Signer | SignerOptions,
+	destroySigner?: boolean,
+};
+
+type ConsumerOptions = {
+	visibilityTimeout?: number,
+	waitTimeSeconds?: number,
+	itemsPerRequest?: number,
+	messageAttributeNames?: string[],
+};
+
+type HooksOptions = {
+	onPoll?: (messages: Message[]) => Promise<Message[]>,
+	onMessage?: (message: Message) => Promise<Message>,
+	onHandlerSuccess?: (message: Message) => Promise<Message>,
+	onHandlerTimeout?: (message: Message) => Promise<Boolean>,
+	onHandlerError?: (message: Message, error: Error) => Promise<Boolean>,
+	onSuccess?: (message: Message) => Promise<Boolean>,
+	onError?: ( hook: HookName, message: Message, error: Error) => Promise<Boolean>,
+	onSQSError?: (error: Error, message?: Message) => Promise<void>,
+};
+
+export type SQSConsumerOptions = {
+	queueARN: string,
+	handler: (message: Message) => Promise<any>,
+	logger?: Logger,
+	autostart?: boolean,
+	handlerOptions?: HandlerOptions,
+	clientOptions?: ClientOptions,
+	consumerOptions?: ConsumerOptions,
+	hooks?: HooksOptions
+};
 
 export class SQSConsumer {
 
 	private readonly queueARN: string;
-	private readonly handlerOptions: {
-		deleteMessage?: boolean,
-		extendVisibilityTimeout?: boolean,
-		executionTimeout?: number,
-		parallelExecution?: boolean,
-	};
-	private readonly clientOptions: {
-		destroySigner?: boolean,
-	};
-	private readonly consumerOptions: {
-		deleteMessage?: boolean,
-		visibilityTimeout?: number,
-		waitTimeSeconds?: number,
-		itemsPerRequest?: number,
-		messageAttributeNames?: string[],
-	};
+	private readonly handlerOptions: HandlerOptions;
+	private readonly clientOptions: Pick<ClientOptions, "destroySigner">;
+	private readonly consumerOptions: ConsumerOptions;
 	private readonly sqsClient: MiniSQSClient;
 	private readonly hooks: Hooks;
 	private readonly messageHandler: (message: Message) => Promise<any>;
 	private messagesOnFly: number = 0;
 	private running: boolean = false;
 	private destroyed: boolean = false;
+	private readonly logger: Logger;
 
-	constructor(options:{
-		queueARN: string,
-		handler: (message: Message) => Promise<any>,
-		autostart?: boolean,
-		handlerOptions?: {
-			deleteMessage?: boolean,
-			extendVisibilityTimeout?: boolean,
-			executionTimeout?: number,
-			parallelExecution?: boolean,
-		},
-		clientOptions?: {
-			sqsClient?: MiniSQSClient,
-			endpoint?: string,
-			undiciOptions?: Pool.Options,
-			signer?: Signer | SignerOptions,
-			destroySigner?: boolean,
-		},
-		consumerOptions?: {
-			deleteMessage?: boolean,
-			visibilityTimeout?: number,
-			waitTimeSeconds?: number,
-			itemsPerRequest?: number,
-			messageAttributeNames?: string[],
-		},
-		hooks?: {
-			onPoll?: (messages: Message[]) => Promise<Message[]>,
-			onMessage?: (message: Message) => Promise<Message>,
-			onHandlerSuccess?: (message: Message) => Promise<Message>,
-			onHandlerTimeout?: (message: Message) => Promise<Boolean>,
-			onHandlerError?: (message: Message, error: Error) => Promise<Boolean>,
-			onSuccess?: (message: Message) => Promise<Boolean>,
-			onError?: ( hook: HookName, message: Message, error: Error) => Promise<Boolean>,
-			onSQSError?: (error: Error, message?: Message) => Promise<void>,
-	}}) {
+	constructor(options: SQSConsumerOptions) {
 
 		if(!options.queueARN) throw new Error("queueARN is required");
 		if(!options.handler || typeof options.handler !== "function") throw new Error("handler is required and must be a function");
-
-		this.hooks = new Hooks();
+		this.logger = options.logger ?? console;
+		this.hooks = new Hooks(this.logger);
 		this.queueARN = options.queueARN;
+		const region = this.queueARN.split(":").reverse()[2];
 		this.clientOptions = { destroySigner: options.clientOptions?.destroySigner ?? true };
-
+		this.handlerOptions = {
+			deleteMessage: options.handlerOptions?.deleteMessage ?? true,
+			extendVisibilityTimeout: options.handlerOptions?.extendVisibilityTimeout ?? true,
+			executionTimeout: options.handlerOptions?.executionTimeout ?? 30_000,
+			parallelExecution: options.handlerOptions?.parallelExecution ?? true
+		};
+		this.consumerOptions = {
+			visibilityTimeout: options.consumerOptions?.visibilityTimeout ?? 30,
+			waitTimeSeconds: options.consumerOptions?.waitTimeSeconds ?? 20,
+			itemsPerRequest: options.consumerOptions?.itemsPerRequest ?? 10,
+			messageAttributeNames: options.consumerOptions?.messageAttributeNames ?? []
+		}
+		this.sqsClient = options.clientOptions?.sqsClient ?? new MiniSQSClient(region, options.clientOptions?.endpoint, options.clientOptions?.undiciOptions, options.clientOptions?.signer);
 		if (options.hooks){
 			for (const [key, value] of Object.entries(options.hooks)) {
 				if(typeof value !== "function") throw new Error(`${key} must be a function`);
@@ -107,7 +121,7 @@ export class SQSConsumer {
 	private async runHandler(handler: typeof this.messageHandler, message: Message) {
 		try {
 			let handlerResult: any;
-			if(this.consumerOptions.waitTimeSeconds) {
+			if(this.handlerOptions.executionTimeout) {
 				const response = await Promise.race([
 					handler(message),
 					new Promise((resolve, reject) => {
@@ -140,7 +154,7 @@ export class SQSConsumer {
 	private haExtendVisibilityTimeout(messages: Message[], visibilityTimeout: number) {
 		if(this.handlerOptions.extendVisibilityTimeout !== false) {
 			const processingMessages = messages.map(message => message.ReceiptHandle);
-			return setTimeout(async () => {
+			return setInterval(async () => {
 				try {
 					await this.sqsClient.changeMessageVisibilityBatch(this.queueARN, processingMessages, visibilityTimeout);
 				}
@@ -166,7 +180,7 @@ export class SQSConsumer {
 	private async pollMessages() {
 		if(!this.running) return;
 		try {
-			const visibilityTimeout = this.consumerOptions.visibilityTimeout || 30;
+			const visibilityTimeout = this.consumerOptions.visibilityTimeout;
 			const messagesResult = await this.sqsClient.receiveMessage(this.queueARN, {
 				WaitTimeSeconds: this.consumerOptions.waitTimeSeconds,
 				MaxNumberOfMessages: this.consumerOptions.itemsPerRequest,
@@ -198,7 +212,7 @@ export class SQSConsumer {
 						this.messagesOnFly -= 1;
 					}
 				}
-				if(haTimeout) clearTimeout(haTimeout);
+				if(haTimeout) clearInterval(haTimeout);
 			}
 			else {
 				this.messagesOnFly -= totalMessages;
@@ -222,7 +236,7 @@ export class SQSConsumer {
 		if(!this.running) throw new Error("Consumer is not running");
 		this.running = false;
 		while (this.messagesOnFly > 0) {
-			await new Promise(resolve => setTimeout(resolve, 500));
+			await setTimeoutAsync(500);
 		}
 		if(destroy) {
 			await this.sqsClient.destroy(this.clientOptions.destroySigner);
