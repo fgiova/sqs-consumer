@@ -1,5 +1,4 @@
 const { spawn } = require("child_process");
-const { SNS } = require("@aws-sdk/client-sns");
 const { SQS } = require("@aws-sdk/client-sqs");
 const { GenericContainer, Wait, Network }  = require("testcontainers");
 
@@ -34,46 +33,13 @@ const startLocalStack = async () => {
 }
 
 const bootstrap = async (host, port) => {
-    console.log(`Bootstrap SNS, SQS`);
-    const sns = new SNS({
-        endpoint: `http://${host}:${port}`
-    });
+    console.log(`Bootstrap SQS`);
     const sqs = new SQS({
         endpoint: `http://${host}:${port}`
     })
-    await sns.createTopic({
-        Name: "test-topic"
-    });
     await sqs.createQueue({
         QueueName: "test-queue"
     });
-    await sqs.createQueue({
-        QueueName: "test-queue-topic"
-    });
-    await sqs.createQueue({
-        QueueName: "test-queue-topic-filtered"
-    })
-
-    await sns.subscribe({
-        TopicArn :"arn:aws:sns:eu-central-1:000000000000:test-topic",
-        Protocol: "sqs",
-        Endpoint: "arn:aws:sqs:eu-central-1:000000000000:test-queue-topic",
-        Attributes:{
-            RawMessageDelivery: "true"
-        }
-    });
-    await sns.subscribe({
-        TopicArn :"arn:aws:sns:eu-central-1:000000000000:test-topic",
-        Protocol: "sqs",
-        Endpoint: "arn:aws:sqs:eu-central-1:000000000000:test-queue-topic-filtered",
-        Attributes:{
-            RawMessageDelivery: "true",
-            FilterPolicy: JSON.stringify({
-                "test": ["test"]
-            }),
-            FilterPolicyScope: "MessageAttributes"
-        },
-    })
 };
 
 module.exports = {

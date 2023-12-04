@@ -10,7 +10,9 @@
     "build": "tsc",
     "lint": "eslint 'src/**/*.ts'",
     "test": "tap",
-    "test:debug": "tap --only --timeout=0"
+    "test:debug": "tap --only --timeout=0",
+    "test:coverage": "tap --coverage --coverage-report=text-lcov",
+    "test:local": "TEST_LOCAL=true tap"
   },
   "repository": {
     "type": "git",
@@ -58,6 +60,7 @@
     "eslint-plugin-import": "^2.28.1",
     "semantic-release": "^21.0.9",
     "tap": "^18.5.2",
+    "testcontainers": "^10.2.1",
     "ts-node": "^10.9.1",
     "typescript": "^5.2.2"
   }
