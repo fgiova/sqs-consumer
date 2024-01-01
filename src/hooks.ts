@@ -1,4 +1,5 @@
 import {Logger} from "./logger";
+import {Message} from "@fgiova/mini-sqs-client";
 
 export type HookName = "onPoll" |
 	"onMessage" |
@@ -9,39 +10,53 @@ export type HookName = "onPoll" |
 	"onError" |
 	"onSQSError";
 
+type HookSymbolData = {
+	S: symbol,
+	throwable: boolean
+	type: "boolean-return" | "message-return" | "void"
+}
+
 export class Hooks {
-	private readonly hookSymbols = {
+	private readonly hookSymbols: Record<HookName, HookSymbolData> = {
 		onPoll: {
 			S:Symbol("poll"),
-			throwable: true
+			throwable: true,
+			type: "message-return"
 		},
 		onMessage: {
 			S:Symbol("message"),
-			throwable: true
+			throwable: true,
+			type: "message-return"
 		},
 		onHandlerSuccess: {
 			S:Symbol("handlerSuccess"),
-			throwable: false
+			throwable: false,
+			type: "message-return"
 		},
 		onHandlerTimeout: {
 			S:Symbol("handlerTimeout"),
-			throwable: false
+			throwable: false,
+			type: "boolean-return"
 		},
 		onHandlerError: {
 			S:Symbol("handlerError"),
-			throwable: false
+			throwable: false,
+			type: "boolean-return"
 		},
 		onSuccess: {
 			S:Symbol("success"),
-			throwable: false
+			throwable: false,
+			type: "boolean-return"
 		},
 		onError: {
 			S:Symbol("error"),
-			throwable: false
+			throwable: false,
+			type: "boolean-return"
 		},
 		onSQSError: {
 			S:Symbol("sqsError"),
-			throwable: false
+			throwable: false,
+			type: "void"
 		},
 
 	}
@@ -71,15 +86,45 @@ export class Hooks {
 		const hookSymbol = this.hookSymbols[hook];
 		try {
 			if(!hookSymbol) throw new Error(`Invalid hook ${hook}`);
-			for (const fn of this.hooks[hookSymbol.S]!) {
-				await fn(...args);
+			switch (hookSymbol.type) {
+				case "boolean-return":
+					return await this.runHookWithBooleanReturn(hookSymbol, ...args);
+				case "message-return":
+					const [message, ...someArgs] = args;
+					return await this.runHookWithMessageReturn(hookSymbol, message, ...someArgs);
+				case "void":
+					return await this.runHookWithVoidReturn(hookSymbol, ...args);
 			}
+			/* c8 ignore next 1 */
 		}
 		catch (error) {
 			error.message = `Error running hook ${hook}: ${error.message}`;
 			if(hookSymbol.throwable!==false) throw error;
 			this.logger.error(error);
 		}
+	}
 
+	private async runHookWithVoidReturn(hookSymbol: HookSymbolData, ...args: any[]) {
+		for (const fn of this.hooks[hookSymbol.S]!) {
+			await fn(...args);
+		}
+		return;
+	}
+
+	private async runHookWithMessageReturn(hookSymbol: HookSymbolData, message: Message | Message[], ...args: any[]) {
+		for (const fn of this.hooks[hookSymbol.S]!) {
+			message = await fn(message, ...args);
+		}
+		return message;
+	}
+
+	private async runHookWithBooleanReturn(hookSymbol: HookSymbolData, ...args: any[]) {
+		for (const fn of this.hooks[hookSymbol.S]!) {
+			const continueLoop = await fn(...args);
+			if(!continueLoop) {
+				return false;
+			}
+		}
+		return true;
 	}
 }

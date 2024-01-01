@@ -1,11 +1,17 @@
 import { SQS } from "@aws-sdk/client-sqs";
 
-const sqsPurge = (queueUrl:string) => {
+const sqsPurge = async (queueARN:string) => {
 	const sqs = new SQS({apiVersion: "2012-11-05", endpoint: process.env.LOCALSTACK_ENDPOINT});
-	return sqs.purgeQueue({
-		QueueUrl: queueUrl
-	});
-
+	const [queueName, accountId] = queueARN.split(":").reverse();
+	try {
+		await sqs.purgeQueue({
+			QueueUrl: `${process.env.LOCALSTACK_ENDPOINT}/${accountId}/${queueName}`
+		});
+		console.log(`Purged ${queueARN}`);
+	}
+	catch (e) {
+		console.error(e);
+	}
 }
 
 export {

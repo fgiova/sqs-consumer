@@ -40,6 +40,9 @@ const bootstrap = async (host, port) => {
     await sqs.createQueue({
         QueueName: "test-queue"
     });
+    await sqs.createQueue({
+        QueueName: "test-queue-errors"
+    });
 };
 
 module.exports = {

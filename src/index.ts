@@ -62,6 +62,7 @@ export class SQSConsumer {
 	private readonly messageHandler: (message: Message) => Promise<any>;
 	private messagesOnFly: number = 0;
 	private running: boolean = false;
+	private polling: boolean = false;
 	private destroyed: boolean = false;
 	private readonly logger: Logger;
 
@@ -90,7 +91,7 @@ export class SQSConsumer {
 		if (options.hooks){
 			for (const [key, value] of Object.entries(options.hooks)) {
 				if(typeof value !== "function") throw new Error(`${key} must be a function`);
-				this.hooks.addHook(key as HookName, value);
+				this.addHook(key as HookName, value);
 			}
 		}
 		this.messageHandler = options.handler;
@@ -158,28 +159,34 @@ export class SQSConsumer {
 				try {
 					await this.sqsClient.changeMessageVisibilityBatch(this.queueARN, processingMessages, visibilityTimeout);
 				}
+				/* c8 ignore next 3 */
 				catch (e) {
 					await this.hooks.runHook("onSQSError", e);
 				}
-			}, (visibilityTimeout - 5) * 1000);
+			}, (visibilityTimeout * 1000 - 5) );
 		}
+		return null;
 	}
 
 	private async deleteMessages(messagesResults: Awaited<ReturnType<typeof this.runOnMessageHook>>[]) {
-		if(this.handlerOptions.deleteMessage !== false) {
-			const candidatesToDelete: string[] = [];
-			for (const result of messagesResults) {
-				if(result.result) {
-					candidatesToDelete.push(result.message.ReceiptHandle);
-				}
-				await this.sqsClient.deleteMessageBatch(this.queueARN, candidatesToDelete);
+		const candidatesToDelete: string[] = [];
+		const candidateToRelease: string[] = [];
+		for (const result of messagesResults) {
+			if(result.result && this.handlerOptions.deleteMessage !== false) {
+				candidatesToDelete.push(result.message.ReceiptHandle);
 			}
+			else if(result.error) {
+				candidateToRelease.push(result.message.ReceiptHandle);
+			}
+			if(candidatesToDelete.length) await this.sqsClient.deleteMessageBatch(this.queueARN, candidatesToDelete);
+			if(candidateToRelease.length) await this.sqsClient.changeMessageVisibilityBatch(this.queueARN, candidateToRelease, 0);
 		}
 	}
 
 	private async pollMessages() {
 		if(!this.running) return;
 		try {
+			this.polling = true;
 			const visibilityTimeout = this.consumerOptions.visibilityTimeout;
 			const messagesResult = await this.sqsClient.receiveMessage(this.queueARN, {
 				WaitTimeSeconds: this.consumerOptions.waitTimeSeconds,
@@ -187,6 +194,7 @@ export class SQSConsumer {
 				VisibilityTimeout: visibilityTimeout,
 				MessageAttributeNames: this.consumerOptions.messageAttributeNames,
 			});
+			/* c8 ignore next 1 */
 			const messages = messagesResult.Messages ?? [];
 			const totalMessages = messages.length;
 			this.messagesOnFly += totalMessages;
@@ -205,8 +213,9 @@ export class SQSConsumer {
 					this.messagesOnFly -= messages.length;
 				}
 				else {
-					for (let i = 0; i < messages.length; i++) {
-						const result = await this.runOnMessageHook(messages[i]);
+					const handlingMessages = [...messages];
+					for (let i = 0; i < handlingMessages.length; i++) {
+						const result = await this.runOnMessageHook(handlingMessages[i]);
 						await this.deleteMessages([result]);
 						messages.splice(i, 1);
 						this.messagesOnFly -= 1;
@@ -221,7 +230,7 @@ export class SQSConsumer {
 		catch (e) {
 			await this.hooks.runHook("onSQSError", e);
 		}
-
+		this.polling = false;
 		await this.pollMessages()
 	}
 
@@ -235,12 +244,25 @@ export class SQSConsumer {
 	public async stop(destroy=false) {
 		if(!this.running) throw new Error("Consumer is not running");
 		this.running = false;
-		while (this.messagesOnFly > 0) {
+		while (this.messagesOnFly > 0 || this.polling) {
 			await setTimeoutAsync(500);
 		}
 		if(destroy) {
 			await this.sqsClient.destroy(this.clientOptions.destroySigner);
 			this.destroyed = true;
 		}
+	}
+
+	public addHook(hookName: "onPoll", value: (messages: Message[]) => Promise<Message[]>): void;
+	public addHook(hookName: "onMessage", value: (message: Message) => Promise<Message>): void;
+	public addHook(hookName: "onHandlerSuccess", value: (message: Message) => Promise<Message>): void;
+	public addHook(hookName: "onHandlerTimeout", value: (message: Message) => Promise<Boolean>): void;
+	public addHook(hookName: "onHandlerError", value: (message: Message, error: Error) => Promise<Boolean>): void;
+	public addHook(hookName: "onSuccess", value: (message: Message) => Promise<Boolean>): void;
+	public addHook(hookName: "onError", value: (hook: HookName, message: Message, error: Error) => Promise<Boolean>): void;
+	public addHook(hookName: "onSQSError", value: (error: Error, message?: Message) => Promise<void>): void;
+	public addHook(hookName: HookName, value: Function): void;
+	public addHook(hookName: HookName, value: Function): void {
+		return this.hooks.addHook(hookName, value);
 	}
 }

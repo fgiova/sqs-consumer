@@ -35,6 +35,37 @@ test("hooks class", async (t) => {
 		t.equal(called, true);
 	});
 
+	await t.test("runHook with message return", async (t) => {
+		const hooks = new Hooks() as any;
+		const message = {Body: "test"};
+		hooks.addHook("onMessage", async (message: any) => {
+			message.Body = "changed";
+			return message;
+		});
+		const newMessage = await hooks.runHook("onMessage", message);
+		t.equal(newMessage.Body, "changed");
+	});
+
+	await t.test("runHook with boolean return", async (t) => {
+		const hooks = new Hooks() as any;
+		let functionsCalled = 0;
+		hooks.addHook("onSuccess", async () => {
+			functionsCalled++;
+			return true;
+		});
+		hooks.addHook("onSuccess", async () => {
+			functionsCalled++;
+			return false;
+		});
+		hooks.addHook("onSuccess", async () => {
+			functionsCalled++;
+			return true;
+		});
+		await t.resolves(hooks.runHook("onSuccess"));
+		t.equal(functionsCalled, 2);
+	});
+
+
 	await t.test("runHook with throwable error", async (t) => {
 		const hooks = new Hooks();
 		let called = false;
@@ -76,4 +107,6 @@ test("hooks class", async (t) => {
 		const hooks = new Hooks();
 		await t.rejects(hooks.runHook("onWrongHook" as any));
 	});
+
+
 });
