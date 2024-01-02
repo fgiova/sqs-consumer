@@ -65,7 +65,6 @@ test("hooks class", async (t) => {
 		t.equal(functionsCalled, 2);
 	});
 
-
 	await t.test("runHook with throwable error", async (t) => {
 		const hooks = new Hooks();
 		let called = false;
@@ -107,6 +106,5 @@ test("hooks class", async (t) => {
 		const hooks = new Hooks();
 		await t.rejects(hooks.runHook("onWrongHook" as any));
 	});
-
-
+	
 });

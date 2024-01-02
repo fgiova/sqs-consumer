@@ -7,7 +7,6 @@ const sqsPurge = async (queueARN:string) => {
 		await sqs.purgeQueue({
 			QueueUrl: `${process.env.LOCALSTACK_ENDPOINT}/${accountId}/${queueName}`
 		});
-		console.log(`Purged ${queueARN}`);
 	}
 	catch (e) {
 		console.error(e);
