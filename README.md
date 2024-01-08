@@ -1,6 +1,6 @@
 # SQS consumer using undici
 
-[![NPM version](https://img.shields.io/npm/v/@fgiova/mini-sqs-client.svg?style=flat)](https://www.npmjs.com/package/@fgiova/sqs-consumer)
+[![NPM version](https://img.shields.io/npm/v/@fgiova/sqs-consumer.svg?style=flat)](https://www.npmjs.com/package/@fgiova/sqs-consumer)
 ![CI workflow](https://github.com/fgiova/sqs-consumer/actions/workflows/node.js.yml/badge.svg)
 [![TypeScript](https://img.shields.io/badge/%3C%2F%3E-TypeScript-%230074c1.svg)](http://www.typescriptlang.org/)
 [![Maintainability](https://api.codeclimate.com/v1/badges/0c10549e75ef6c798dfd/maintainability)](https://codeclimate.com/github/fgiova/sqs-consumer/maintainability)
