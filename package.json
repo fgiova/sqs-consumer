@@ -16,7 +16,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/fgiova/sqs-consumergit"
+    "url": "git+https://github.com/fgiova/sqs-consumer.git"
   },
   "author": "Francesco Giovannini <fgiova@fgiova.com>",
   "license": "MIT",
@@ -42,8 +42,7 @@
   },
   "dependencies": {
     "@fgiova/mini-sqs-client": "^2.2.1",
-    "p-map": "^4.0.0",
-    "undici": "^5.27.2"
+    "p-map": "^4.0.0"
   },
   "peerDependencies": {
     "@fgiova/aws-signature": "^2.0.0"
