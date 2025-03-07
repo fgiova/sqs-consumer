@@ -18,7 +18,7 @@ const startLocalStack = async () => {
             source: "/var/run/docker.sock",
             target: "/var/run/docker.sock"
         }])
-        .withWaitStrategy(Wait.forLogMessage("Running on https://0.0.0.0:4566"))
+        .withWaitStrategy(Wait.forListeningPorts())
         .start();
     const port = localStack.getMappedPort(4566);
     const host = localStack.getHost();

@@ -59,7 +59,8 @@ export class Hooks {
 			type: "void"
 		},
 
-	}
+	};
+	// eslint-disable-next-line @typescript-eslint/ban-types
 	private readonly hooks: Record<symbol, Function[]>;
 	private readonly logger: Logger;
 
@@ -76,6 +77,7 @@ export class Hooks {
 			[this.hookSymbols.onSQSError.S]: [],
 		};
 	}
+	// eslint-disable-next-line @typescript-eslint/ban-types
 	public addHook(hook: HookName, fn: Function) {
 		const hookSymbol = this.hookSymbols[hook];
 		if(!hookSymbol) throw new Error(`Invalid hook ${hook}`);
@@ -87,13 +89,13 @@ export class Hooks {
 		try {
 			if(!hookSymbol) throw new Error(`Invalid hook ${hook}`);
 			switch (hookSymbol.type) {
-				case "boolean-return":
-					return await this.runHookWithBooleanReturn(hookSymbol, ...args);
-				case "message-return":
-					const [message, ...someArgs] = args;
-					return await this.runHookWithMessageReturn(hookSymbol, message, ...someArgs);
-				case "void":
-					return await this.runHookWithVoidReturn(hookSymbol, ...args);
+			case "boolean-return":
+				return await this.runHookWithBooleanReturn(hookSymbol, ...args);
+			case "message-return":
+				const [message, ...someArgs] = args;
+				return await this.runHookWithMessageReturn(hookSymbol, message, ...someArgs);
+			case "void":
+				return await this.runHookWithVoidReturn(hookSymbol, ...args);
 			}
 			/* c8 ignore next 1 */
 		}
@@ -105,21 +107,21 @@ export class Hooks {
 	}
 
 	private async runHookWithVoidReturn(hookSymbol: HookSymbolData, ...args: any[]) {
-		for (const fn of this.hooks[hookSymbol.S]!) {
+		for (const fn of this.hooks[hookSymbol.S]) {
 			await fn(...args);
 		}
 		return;
 	}
 
 	private async runHookWithMessageReturn(hookSymbol: HookSymbolData, message: Message | Message[], ...args: any[]) {
-		for (const fn of this.hooks[hookSymbol.S]!) {
+		for (const fn of this.hooks[hookSymbol.S]) {
 			message = await fn(message, ...args);
 		}
 		return message;
 	}
 
 	private async runHookWithBooleanReturn(hookSymbol: HookSymbolData, ...args: any[]) {
-		for (const fn of this.hooks[hookSymbol.S]!) {
+		for (const fn of this.hooks[hookSymbol.S]) {
 			const continueLoop = await fn(...args);
 			if(!continueLoop) {
 				return false;
