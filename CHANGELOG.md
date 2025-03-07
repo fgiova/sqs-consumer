@@ -1,3 +1,13 @@
+# [2.0.0](https://github.com/fgiova/sqs-consumer/compare/1.0.0...2.0.0) (2025-03-07)
+
+
+### Bug Fixes
+
+* fix documentation ([b585f30](https://github.com/fgiova/sqs-consumer/commit/b585f3071aa3889549befb4ebbfa31679aea94a2))
+* fix minimum node version ([cf03143](https://github.com/fgiova/sqs-consumer/commit/cf03143964d0e6a307f75ac4156f3569e458333b))
+* fix minimum node version ([ad316d3](https://github.com/fgiova/sqs-consumer/commit/ad316d3847f11dd87f524f70d860cb14d3d7f80f))
+* Fix Promise.race memory leak using @watchable/unpromise ([377b29c](https://github.com/fgiova/sqs-consumer/commit/377b29c90dfb1950f816dd5c9481d94eabf0cee9))
+
 # 1.0.0 (2024-01-08)
 
 
