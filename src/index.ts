@@ -5,6 +5,7 @@ import {HookName, Hooks} from "./hooks";
 import {TimeoutError} from "./errors";
 import { setTimeout as setTimeoutAsync } from "timers/promises";
 import pMap from "p-map";
+import { Unpromise } from "@watchable/unpromise";
 import {Logger} from "./logger";
 
 type HandlerOptions = {
@@ -33,10 +34,10 @@ type HooksOptions = {
 	onPoll?: (messages: Message[]) => Promise<Message[]>,
 	onMessage?: (message: Message) => Promise<Message>,
 	onHandlerSuccess?: (message: Message) => Promise<Message>,
-	onHandlerTimeout?: (message: Message) => Promise<Boolean>,
-	onHandlerError?: (message: Message, error: Error) => Promise<Boolean>,
-	onSuccess?: (message: Message) => Promise<Boolean>,
-	onError?: ( hook: HookName, message: Message, error: Error) => Promise<Boolean>,
+	onHandlerTimeout?: (message: Message) => Promise<boolean>,
+	onHandlerError?: (message: Message, error: Error) => Promise<boolean>,
+	onSuccess?: (message: Message) => Promise<boolean>,
+	onError?: ( hook: HookName, message: Message, error: Error) => Promise<boolean>,
 	onSQSError?: (error: Error, message?: Message) => Promise<void>,
 };
 
@@ -86,7 +87,7 @@ export class SQSConsumer {
 			waitTimeSeconds: options.consumerOptions?.waitTimeSeconds ?? 20,
 			itemsPerRequest: options.consumerOptions?.itemsPerRequest ?? 10,
 			messageAttributeNames: options.consumerOptions?.messageAttributeNames ?? []
-		}
+		};
 		this.sqsClient = options.clientOptions?.sqsClient ?? new MiniSQSClient(region, options.clientOptions?.endpoint, options.clientOptions?.undiciOptions, options.clientOptions?.signer);
 		if (options.hooks){
 			for (const [key, value] of Object.entries(options.hooks)) {
@@ -104,18 +105,18 @@ export class SQSConsumer {
 		try {
 			await this.hooks.runHook("onMessage", message);
 			const result = await this.runHandler(this.messageHandler, message);
-			await this.hooks.runHook("onSuccess", message)
+			await this.hooks.runHook("onSuccess", message);
 			return {
 				message,
 				result
-			}
+			};
 		}
 		catch (e) {
 			await this.hooks.runHook("onError", "onMessage", message, e);
 			return {
 				message,
 				error: e
-			}
+			};
 		}
 	}
 
@@ -123,7 +124,7 @@ export class SQSConsumer {
 		try {
 			let handlerResult: any;
 			if(this.handlerOptions.executionTimeout) {
-				const response = await Promise.race([
+				const response = await Unpromise.race([
 					handler(message),
 					new Promise((resolve, reject) => {
 						setTimeout(() => {
@@ -231,9 +232,10 @@ export class SQSConsumer {
 			await this.hooks.runHook("onSQSError", e);
 		}
 		this.polling = false;
-		await this.pollMessages()
+		await this.pollMessages();
 	}
 
+	// eslint-disable-next-line @typescript-eslint/require-await
 	public async start() {
 		if(this.running) throw new Error("Consumer is already running");
 		if(this.destroyed) throw new Error("Consumer is destroyed");
@@ -255,13 +257,17 @@ export class SQSConsumer {
 
 	public addHook(hookName: "onPoll", value: (messages: Message[]) => Promise<Message[]>): void;
 	public addHook(hookName: "onMessage", value: (message: Message) => Promise<Message>): void;
+	// eslint-disable-next-line @typescript-eslint/unified-signatures
 	public addHook(hookName: "onHandlerSuccess", value: (message: Message) => Promise<Message>): void;
-	public addHook(hookName: "onHandlerTimeout", value: (message: Message) => Promise<Boolean>): void;
-	public addHook(hookName: "onHandlerError", value: (message: Message, error: Error) => Promise<Boolean>): void;
-	public addHook(hookName: "onSuccess", value: (message: Message) => Promise<Boolean>): void;
-	public addHook(hookName: "onError", value: (hook: HookName, message: Message, error: Error) => Promise<Boolean>): void;
+	public addHook(hookName: "onHandlerTimeout", value: (message: Message) => Promise<boolean>): void;
+	public addHook(hookName: "onHandlerError", value: (message: Message, error: Error) => Promise<boolean>): void;
+	// eslint-disable-next-line @typescript-eslint/unified-signatures
+	public addHook(hookName: "onSuccess", value: (message: Message) => Promise<boolean>): void;
+	public addHook(hookName: "onError", value: (hook: HookName, message: Message, error: Error) => Promise<boolean>): void;
 	public addHook(hookName: "onSQSError", value: (error: Error, message?: Message) => Promise<void>): void;
+	// eslint-disable-next-line @typescript-eslint/ban-types
 	public addHook(hookName: HookName, value: Function): void;
+	// eslint-disable-next-line @typescript-eslint/ban-types
 	public addHook(hookName: HookName, value: Function): void {
 		return this.hooks.addHook(hookName, value);
 	}
