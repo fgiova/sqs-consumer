@@ -1,3 +1,10 @@
+# [2.1.0](https://github.com/fgiova/sqs-consumer/compare/2.0.1...2.1.0) (2025-09-02)
+
+
+### Features
+
+* update dependencies ([35a4abc](https://github.com/fgiova/sqs-consumer/commit/35a4abce94b464edbc898f11757b2a2b847269d9))
+
 ## [2.0.1](https://github.com/fgiova/sqs-consumer/compare/2.0.0...2.0.1) (2025-03-07)
 
 
