@@ -1,14 +1,29 @@
 {
   "name": "@fgiova/sqs-consumer",
   "version": "2.0.1",
-  "main": "dist/index.js",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.mts",
+        "default": "./dist/esm/index.mjs"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
   "files": [
     "dist"
   ],
   "scripts": {
-    "prebuild": "rimraf dist",
-    "build": "tsc",
-    "lint": "eslint 'src/**/*.ts'",
+    "clean": "rimraf dist",
+    "preBuild": "npm run clean",
+    "build": "esmBuilder",
+    "lint": "biome ci ./src ./test",
+    "fix": "biome check --write ./src ./test",
     "test": "tap",
     "test:debug": "tap --only --timeout=0",
     "test:coverage": "tap --coverage-report=lcovonly --coverage-report=text",
@@ -41,26 +56,25 @@
     ]
   },
   "dependencies": {
-    "@fgiova/mini-sqs-client": "^2.2.1",
+    "@fgiova/mini-sqs-client": "^3.2.0",
     "@watchable/unpromise": "^1.0.2",
-    "p-map": "^4.0.0"
+    "p-map": "^7.0.3"
   },
   "peerDependencies": {
-    "@fgiova/aws-signature": "^2.0.0"
+    "@fgiova/aws-signature": "^3.1.0"
   },
   "devDependencies": {
     "@aws-sdk/client-sqs": "^3.758.0",
+    "@biomejs/biome": "2.2.2",
+    "@fgiova/cjs-esm-ts-builder": "^1.2.0",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
+    "@tsconfig/node20": "^20.1.4",
     "@types/node": "^20.17.23",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
     "conventional-changelog-conventionalcommits": "^8.0.0",
-    "eslint": "^8.57.1",
-    "eslint-plugin-import": "^2.31.0",
     "semantic-release": "^24.2.3",
     "tap": "^21.1.0",
-    "testcontainers": "^10.18.0",
+    "testcontainers": "^11.5.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2"
   }

@@ -1,25 +1,18 @@
 {
+  "extends": "@tsconfig/node20/tsconfig.json",
   "ts-node": {
     "transpileOnly": true
   },
   "compilerOptions": {
-    "target": "ES2022",
-    "moduleResolution": "node",
     "outDir": "dist",
-    "declaration": true,
     "rootDir": "src",
-    "module": "commonjs",
-    "sourceMap": false,
-    "noImplicitAny": true,
-    "esModuleInterop": true,
-    "noUnusedLocals": true,
     "typeRoots": [
-      "./node_modules/@types",
+      "./node_modules/@types"
     ],
-    "skipLibCheck": true
+    "declaration": true
   },
   "exclude": ["node_modules", "dist"],
   "include": [
-    "src/**/*",
+    "src/**/*"
   ]
 }

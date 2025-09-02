@@ -17,7 +17,7 @@ jobs:
       contents: read
     strategy:
       matrix:
-        node-version: [20, 22]
+        node-version: [20, 22, 24]
         os: [ubuntu-latest]
     steps:
       - name: Check out repo
@@ -38,13 +38,10 @@ jobs:
 
       - name: publish code coverage to code-climate (duh)
         if: ${{ github.event_name == 'push' && matrix.node-version == 20 }} # Push coverage only once inside the matrix.
-        uses: paambaati/codeclimate-action@v5.0.0
-        env:
-          CC_TEST_REPORTER_ID: 12add780a1297306e7d223690db29a4d0f3b3f6ec122d51ff5a0a6f60f7c0afb
+        uses: qltysh/qlty-action/coverage@v2
         with:
-          debug: true
-          coverageLocations: |
-            ${{github.workspace}}/.tap/report/lcov.info:lcov
+          token: ${{secrets.QLTY_COVERAGE_TOKEN}}
+          files: ${{github.workspace}}/.tap/report/lcov.info
 
   build:
 
@@ -52,7 +49,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [20.x, 22.x]
+        node-version: [20.x, 22.x, 24.x]
 
     steps:
 

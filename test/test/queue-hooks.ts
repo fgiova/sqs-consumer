@@ -1,14 +1,13 @@
-// @ts-ignore
+// @ts-expect-error
 import "../helpers/localtest";
-import {teardown, test} from "tap";
-import { setTimeout } from "timers/promises";
-import {SignerSingleton} from "@fgiova/aws-signature";
-import {Message, MiniSQSClient} from "@fgiova/mini-sqs-client";
-import {SQSConsumer} from "../../src";
-// @ts-ignore
-import {sqsPurge} from "../helpers/sqsMessage";
-import {HookName} from "../../src/hooks";
-
+import { setTimeout } from "node:timers/promises";
+import { SignerSingleton } from "@fgiova/aws-signature";
+import { type Message, MiniSQSClient } from "@fgiova/mini-sqs-client";
+import { teardown, test } from "tap";
+import { SQSConsumer } from "../../src";
+import type { HookName } from "../../src/hooks";
+// @ts-expect-error
+import { sqsPurge } from "../helpers/sqsMessage";
 
 const queueARN = "arn:aws:sqs:eu-central-1:000000000000:test-queue-hooks";
 
@@ -21,12 +20,16 @@ async function teardownConsumer(consumer: SQSConsumer) {
 	await sqsPurge(queueARN);
 }
 
-test("sqs-consumer hooks", {only: true}, async (t) => {
+test("sqs-consumer hooks", { only: true }, async (t) => {
 	t.beforeEach(async (t) => {
-		const client = new MiniSQSClient("eu-central-1",  process.env.LOCALSTACK_ENDPOINT, undefined);
+		const client = new MiniSQSClient(
+			"eu-central-1",
+			process.env.LOCALSTACK_ENDPOINT,
+			undefined,
+		);
 		t.context = {
 			client,
-		}
+		};
 	});
 	t.afterEach(async (t) => {
 		await t.context.client.destroy(false);
@@ -36,26 +39,26 @@ test("sqs-consumer hooks", {only: true}, async (t) => {
 		const { client } = t.context;
 
 		const messageToSend = {
-			MessageBody: "Hello World!"
+			MessageBody: "Hello World!",
 		};
 
 		const messageSent = await client.sendMessage(queueARN, messageToSend);
 
 		const consumer = new SQSConsumer({
 			queueARN,
-			handler: async (message: Message) => {
-				return {success: true};
+			handler: async () => {
+				return { success: true };
 			},
 			autostart: false,
 			handlerOptions: {
-				executionTimeout: 0
+				executionTimeout: 0,
 			},
 			consumerOptions: {
 				waitTimeSeconds: 1,
 			},
 			clientOptions: {
 				endpoint: process.env.LOCALSTACK_ENDPOINT,
-			}
+			},
 		});
 		t.teardown(async () => {
 			await teardownConsumer(consumer);
@@ -78,26 +81,26 @@ test("sqs-consumer hooks", {only: true}, async (t) => {
 		const { client } = t.context;
 
 		const messageToSend = {
-			MessageBody: "Hello World!"
+			MessageBody: "Hello World!",
 		};
 
 		const messageSent = await client.sendMessage(queueARN, messageToSend);
 
 		const consumer = new SQSConsumer({
 			queueARN,
-			handler: async (message: Message) => {
-				return {success: true};
+			handler: async () => {
+				return { success: true };
 			},
 			autostart: false,
 			handlerOptions: {
-				executionTimeout: 0
+				executionTimeout: 0,
 			},
 			consumerOptions: {
 				waitTimeSeconds: 1,
 			},
 			clientOptions: {
 				endpoint: process.env.LOCALSTACK_ENDPOINT,
-			}
+			},
 		});
 		t.teardown(async () => {
 			await teardownConsumer(consumer);
@@ -119,26 +122,26 @@ test("sqs-consumer hooks", {only: true}, async (t) => {
 		const { client } = t.context;
 
 		const messageToSend = {
-			MessageBody: "Hello World!"
+			MessageBody: "Hello World!",
 		};
 
 		const messageSent = await client.sendMessage(queueARN, messageToSend);
 
 		const consumer = new SQSConsumer({
 			queueARN,
-			handler: async (message: Message) => {
-				return {success: true};
+			handler: async () => {
+				return { success: true };
 			},
 			autostart: false,
 			handlerOptions: {
-				executionTimeout: 0
+				executionTimeout: 0,
 			},
 			consumerOptions: {
 				waitTimeSeconds: 1,
 			},
 			clientOptions: {
 				endpoint: process.env.LOCALSTACK_ENDPOINT,
-			}
+			},
 		});
 		t.teardown(async () => {
 			await teardownConsumer(consumer);
@@ -160,27 +163,27 @@ test("sqs-consumer hooks", {only: true}, async (t) => {
 		const { client } = t.context;
 
 		const messageToSend = {
-			MessageBody: "Hello World!"
+			MessageBody: "Hello World!",
 		};
 
 		const messageSent = await client.sendMessage(queueARN, messageToSend);
 
 		const consumer = new SQSConsumer({
 			queueARN,
-			handler: async (message: Message) => {
+			handler: async () => {
 				await setTimeout(2_000);
-				return {success: true};
+				return { success: true };
 			},
 			autostart: false,
 			handlerOptions: {
-				executionTimeout: 1_000
+				executionTimeout: 1_000,
 			},
 			consumerOptions: {
 				waitTimeSeconds: 1,
 			},
 			clientOptions: {
 				endpoint: process.env.LOCALSTACK_ENDPOINT,
-			}
+			},
 		});
 		t.teardown(async () => {
 			await teardownConsumer(consumer);
@@ -202,39 +205,44 @@ test("sqs-consumer hooks", {only: true}, async (t) => {
 		const { client } = t.context;
 
 		const messageToSend = {
-			MessageBody: "Hello World!"
+			MessageBody: "Hello World!",
 		};
 
 		const messageSent = await client.sendMessage(queueARN, messageToSend);
 
 		const consumer = new SQSConsumer({
 			queueARN,
-			handler: async (message: Message) => {
+			handler: async () => {
 				throw new Error("test");
 			},
 			autostart: false,
 			handlerOptions: {
-				executionTimeout: 0
+				executionTimeout: 0,
 			},
 			consumerOptions: {
 				waitTimeSeconds: 1,
 			},
 			clientOptions: {
 				endpoint: process.env.LOCALSTACK_ENDPOINT,
-			}
+			},
 		});
 		t.teardown(async () => {
 			await teardownConsumer(consumer);
 		});
-		const messagePromise = new Promise<{ message: Message, error: Error }>((resolve) => {
-			consumer.addHook("onHandlerError", async (message: Message, error: Error) => {
-				resolve({
-					message,
-					error
-				});
-				return message;
-			});
-		});
+		const messagePromise = new Promise<{ message: Message; error: Error }>(
+			(resolve) => {
+				consumer.addHook(
+					"onHandlerError",
+					async (message: Message, error: Error) => {
+						resolve({
+							message,
+							error,
+						});
+						return message;
+					},
+				);
+			},
+		);
 		await consumer.start();
 		await t.resolves(messagePromise);
 		const message = await messagePromise;
@@ -247,42 +255,49 @@ test("sqs-consumer hooks", {only: true}, async (t) => {
 		const { client } = t.context;
 
 		const messageToSend = {
-			MessageBody: "Hello World!"
+			MessageBody: "Hello World!",
 		};
 
 		const messageSent = await client.sendMessage(queueARN, messageToSend);
 
 		const consumer = new SQSConsumer({
 			queueARN,
-			handler: async (message: Message) => {
-				return {success: true};
+			handler: async () => {
+				return { success: true };
 			},
 			autostart: false,
 			handlerOptions: {
-				executionTimeout: 0
+				executionTimeout: 0,
 			},
 			consumerOptions: {
 				waitTimeSeconds: 1,
 			},
 			clientOptions: {
 				endpoint: process.env.LOCALSTACK_ENDPOINT,
-			}
+			},
 		});
 		t.teardown(async () => {
 			await teardownConsumer(consumer);
 		});
-		consumer.addHook("onMessage", async (message: Message) => {
+		consumer.addHook("onMessage", async () => {
 			throw new Error("test");
 		});
-		const messagePromise = new Promise<{ hookName: HookName, message: Message, error: Error }>((resolve) => {
-			consumer.addHook("onError", async (hookName: HookName, message: Message, error: Error) => {
-				resolve({
-					hookName,
-					message,
-					error
-				});
-				return message;
-			});
+		const messagePromise = new Promise<{
+			hookName: HookName;
+			message: Message;
+			error: Error;
+		}>((resolve) => {
+			consumer.addHook(
+				"onError",
+				async (hookName: HookName, message: Message, error: Error) => {
+					resolve({
+						hookName,
+						message,
+						error,
+					});
+					return message;
+				},
+			);
 		});
 		await consumer.start();
 		await t.resolves(messagePromise);
@@ -297,26 +312,26 @@ test("sqs-consumer hooks", {only: true}, async (t) => {
 		const { client } = t.context;
 
 		const messageToSend = {
-			MessageBody: "Hello World!"
+			MessageBody: "Hello World!",
 		};
 
 		const messageSent = await client.sendMessage(queueARN, messageToSend);
 
 		const consumer = new SQSConsumer({
 			queueARN,
-			handler: async (message: Message) => {
-				return {success: true};
+			handler: async () => {
+				return { success: true };
 			},
 			autostart: false,
 			handlerOptions: {
-				executionTimeout: 0
+				executionTimeout: 0,
 			},
 			consumerOptions: {
 				waitTimeSeconds: 1,
 			},
 			clientOptions: {
 				endpoint: process.env.LOCALSTACK_ENDPOINT,
-			}
+			},
 		});
 		t.teardown(async () => {
 			await teardownConsumer(consumer);
