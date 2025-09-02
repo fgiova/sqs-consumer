@@ -1,18 +1,19 @@
-// @ts-ignore
-import path from "path"
-// @ts-ignore
-import fs from "fs";
-import {Socket} from "net";
-import {teardown} from "tap";
+import fs from "node:fs";
+import { Socket } from "node:net";
+import path from "node:path";
+import { teardown } from "tap";
 
 const defaultExport = () => {
 	require("dotenv").config({
-		path: ".env.dev"
-	})
-	if(!process.env.TEST_LOCAL) {
-		const jsonString = fs.readFileSync(path.resolve(process.cwd(), "test-env.json"), {
-			encoding: "utf8"
-		});
+		path: ".env.dev",
+	});
+	if (!process.env.TEST_LOCAL) {
+		const jsonString = fs.readFileSync(
+			path.resolve(process.cwd(), "test-env.json"),
+			{
+				encoding: "utf8",
+			},
+		);
 		try {
 			const envConfig = JSON.parse(jsonString);
 
@@ -23,11 +24,13 @@ const defaultExport = () => {
 			console.error(err);
 		}
 	}
-	if(process.env.REAPER) {
+	if (process.env.REAPER) {
 		const [host, port] = process.env.REAPER.split(":");
 		const socket = new Socket();
 		socket.connect(Number(port), host, () => {
-			socket.write(`label=org.testcontainers.session-id=${process.env.REAPER_SESSION}\r\n`);
+			socket.write(
+				`label=org.testcontainers.session-id=${process.env.REAPER_SESSION}\r\n`,
+			);
 		});
 		socket.on("error", (error) => {
 			console.log(error);
@@ -42,5 +45,5 @@ const defaultExport = () => {
 			}, 300);
 		});
 	}
-}
+};
 defaultExport();

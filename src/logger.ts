@@ -1,6 +1,7 @@
 /**
  * Represents a generic logger that could be a simple console, pino etc.
  */
+/** biome-ignore-all lint/suspicious/noExplicitAny: leave message logger as any */
 export interface Logger {
 	trace(message?: any, ...optionalParams: any[]): void;
 	debug(message?: any, ...optionalParams: any[]): void;
@@ -9,4 +10,3 @@ export interface Logger {
 	error(message?: any, ...optionalParams: any[]): void;
 	[x: string]: any;
 }
-

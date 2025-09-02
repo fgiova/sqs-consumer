@@ -1,12 +1,11 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: ignore visibility for hooks */
+import { setTimeout } from "node:timers/promises";
 import { test } from "tap";
-import {Hooks} from "../../src/hooks";
-import { setTimeout } from "timers/promises";
-
+import { Hooks } from "../../src/hooks";
 
 test("hooks class", async (t) => {
-
 	await t.test("addHook", async (t) => {
-		const hooks = new Hooks() as any
+		const hooks = new Hooks() as any;
 		const fn = () => {};
 		hooks.addHook("onMessage", fn);
 		t.equal(hooks.hooks[hooks.hookSymbols.onMessage.S]?.[0], fn);
@@ -37,7 +36,7 @@ test("hooks class", async (t) => {
 
 	await t.test("runHook with message return", async (t) => {
 		const hooks = new Hooks() as any;
-		const message = {Body: "test"};
+		const message = { Body: "test" };
 		hooks.addHook("onMessage", async (message: any) => {
 			message.Body = "changed";
 			return message;
@@ -83,7 +82,7 @@ test("hooks class", async (t) => {
 		const hooks = new Hooks({
 			error(error: Error) {
 				errorCalledMessage = error.message;
-			}
+			},
 		} as any);
 		let called = false;
 		const fn = async () => {
@@ -106,5 +105,4 @@ test("hooks class", async (t) => {
 		const hooks = new Hooks();
 		await t.rejects(hooks.runHook("onWrongHook" as any));
 	});
-	
 });

@@ -1,34 +1,39 @@
-// @ts-ignore
+// @ts-expect-error
 import "../helpers/localtest";
-import {before, teardown, test} from "tap";
-import { setTimeout } from "timers/promises";
-import {SQSConsumer} from "../../src/index";
-import {MiniSQSClient,Message} from "@fgiova/mini-sqs-client";
-import {Signer} from "@fgiova/aws-signature";
-
+import { setTimeout } from "node:timers/promises";
+import { Signer } from "@fgiova/aws-signature";
+import { type Message, MiniSQSClient } from "@fgiova/mini-sqs-client";
+import { before, teardown, test } from "tap";
+import { SQSConsumer } from "../../src/index";
 
 const queueARN = "arn:aws:sqs:eu-central-1:000000000000:test-queue-errors";
 let signer: Signer;
 let client: MiniSQSClient;
 before(() => {
 	signer = new Signer();
-	client = new MiniSQSClient("eu-central-1",  process.env.LOCALSTACK_ENDPOINT, undefined, signer);
+	client = new MiniSQSClient(
+		"eu-central-1",
+		process.env.LOCALSTACK_ENDPOINT,
+		undefined,
+		signer,
+	);
 });
 teardown(async () => {
 	await signer.destroy();
 });
 
-test("sqs-consumer class Errors", {only: true}, async (t) => {
+test("sqs-consumer class Errors", { only: true }, async (t) => {
 	await t.test("Handler Time Out Error on constructor", async (t) => {
 		const messageToSend = {
-			MessageBody: "Hello World!"
-		}
+			MessageBody: "Hello World!",
+		};
 
 		await client.sendMessage(queueARN, messageToSend);
-		let onHandlerTimeout: (message: Message) => Promise<Boolean>;
-		const timeoutErrorMessage = new Promise<Message>((resolve, reject) => {
+		let onHandlerTimeout: (message: Message) => Promise<boolean>;
+		const timeoutErrorMessage = new Promise<Message>((resolve, _reject) => {
 			onHandlerTimeout = async (message: Message) => {
-				await client.deleteMessage(queueARN, message.ReceiptHandle);
+				// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
+				await client.deleteMessage(queueARN, message.ReceiptHandle!);
 				resolve(message);
 				return true;
 			};
@@ -36,185 +41,199 @@ test("sqs-consumer class Errors", {only: true}, async (t) => {
 
 		const consumer = new SQSConsumer({
 			queueARN,
-			handler: async (message: Message) => {
+			handler: async () => {
 				await setTimeout(5_000);
-				return {success: true};
+				return { success: true };
 			},
 			handlerOptions: {
-				executionTimeout: 1000
+				executionTimeout: 1000,
 			},
 			clientOptions: {
 				endpoint: process.env.LOCALSTACK_ENDPOINT,
-				signer
+				signer,
 			},
 			hooks: {
-				onHandlerTimeout
-			}
+				// @ts-expect-error
+				onHandlerTimeout,
+			},
 		});
 
 		t.teardown(async () => {
-			await consumer.stop()
+			await consumer.stop();
 		});
 		await t.resolves(timeoutErrorMessage);
 		t.same((await timeoutErrorMessage).Body, messageToSend.MessageBody);
 	});
 	await t.test("Add Handler Time Out Error", async (t) => {
 		const messageToSend = {
-			MessageBody: "Hello World!"
-		}
+			MessageBody: "Hello World!",
+		};
 
 		await client.sendMessage(queueARN, messageToSend);
 
 		const consumer = new SQSConsumer({
 			queueARN,
-			handler: async (message: Message) => {
+			handler: async () => {
 				await setTimeout(5_000);
-				return {success: true};
+				return { success: true };
 			},
 			handlerOptions: {
-				executionTimeout: 1000
+				executionTimeout: 1000,
 			},
 			clientOptions: {
 				endpoint: process.env.LOCALSTACK_ENDPOINT,
-				signer
-			}
+				signer,
+			},
 		});
-		const timeoutErrorMessage = new Promise<Message>((resolve, reject) => {
+		const timeoutErrorMessage = new Promise<Message>((resolve, _reject) => {
 			consumer.addHook("onHandlerTimeout", async (message: Message) => {
-				await client.deleteMessage(queueARN, message.ReceiptHandle);
+				// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
+				await client.deleteMessage(queueARN, message.ReceiptHandle!);
 				resolve(message);
 				return true;
 			});
 		});
 		t.teardown(async () => {
-			await consumer.stop()
-		})
+			await consumer.stop();
+		});
 		await t.resolves(timeoutErrorMessage);
 		t.same((await timeoutErrorMessage).Body, messageToSend.MessageBody);
 	});
 
-
 	await t.test("Add Handler Error", async (t) => {
 		const messageToSend = {
-			MessageBody: "Hello World!"
-		}
+			MessageBody: "Hello World!",
+		};
 
 		await client.sendMessage(queueARN, messageToSend);
 
 		const consumer = new SQSConsumer({
 			queueARN,
-			handler: async (message: Message) => {
+			handler: async () => {
 				throw new Error("test");
 			},
 			handlerOptions: {
-				executionTimeout: 1000
+				executionTimeout: 1000,
 			},
 			clientOptions: {
 				endpoint: process.env.LOCALSTACK_ENDPOINT,
-				signer
-			}
+				signer,
+			},
 		});
-		const errorMessage = new Promise<Message>((resolve, reject) => {
+		const errorMessage = new Promise<Message>((resolve, _reject) => {
 			consumer.addHook("onHandlerError", async (message: Message) => {
-				await client.deleteMessage(queueARN, message.ReceiptHandle);
+				// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
+				await client.deleteMessage(queueARN, message.ReceiptHandle!);
 				resolve(message);
 				return true;
 			});
 		});
 		t.teardown(async () => {
-			await consumer.stop()
-		})
+			await consumer.stop();
+		});
 		await t.resolves(errorMessage);
 		t.same((await errorMessage).Body, messageToSend.MessageBody);
 	});
 
 	await t.test("SQS Error", async (t) => {
 		const messageToSend = {
-			MessageBody: "Hello World!"
-		}
+			MessageBody: "Hello World!",
+		};
 
 		await client.sendMessage(queueARN, messageToSend);
 
 		const consumer = new SQSConsumer({
 			queueARN,
 			autostart: false,
-			handler: async (message: Message) => {
-				return {success: true};
+			handler: async () => {
+				return { success: true };
 			},
 			handlerOptions: {
-				executionTimeout: 1000
+				executionTimeout: 1000,
 			},
 			clientOptions: {
-				signer
-			}
+				signer,
+			},
 		});
-		const errorMessage = new Promise<string>((resolve, reject) => {
-			consumer.addHook("onSQSError", async  (error: Error, message?: Message) => {
-				resolve(JSON.parse(error.message).message);
+		const errorMessage = new Promise<string>((resolve, _reject) => {
+			consumer.addHook("onSQSError", async (error: Error) => {
+				try {
+					resolve(JSON.parse(error.message).message);
+				} catch (e) {
+					resolve(error.message);
+				}
+
 				return true;
 			});
 		});
 		t.teardown(async () => {
 			await consumer.stop();
-		})
+		});
 		await consumer.start();
 		await t.resolves(errorMessage);
-		t.same((await errorMessage), "The security token included in the request is invalid.");
+		t.same(
+			await errorMessage,
+			"The security token included in the request is invalid.",
+		);
 	});
 
 	await t.test("Missing ARN", async (t) => {
 		t.throws(() => {
 			new SQSConsumer({
+				// @ts-expect-error
 				queueARN: undefined,
-				handler: async (message: Message) => {
-					return true
+				handler: async () => {
+					return true;
 				},
 			});
-		}, "queueARN is required")
+		}, "queueARN is required");
 	});
 	await t.test("Missing Handler", async (t) => {
 		t.throws(() => {
 			new SQSConsumer({
 				queueARN,
-				handler: undefined
+				// @ts-expect-error
+				handler: undefined,
 			});
-		}, "handler is required and must be a function")
+		}, "handler is required and must be a function");
 	});
 	await t.test("Handler not a function", async (t) => {
 		t.throws(() => {
 			new SQSConsumer({
 				queueARN,
-				handler: "foo" as any
+				// biome-ignore lint/suspicious/noExplicitAny: type is not important here
+				handler: "foo" as any,
 			});
-		}, "handler is required and must be a function")
+		}, "handler is required and must be a function");
 	});
 	await t.test("Hook is not a function", async (t) => {
 		t.throws(() => {
 			new SQSConsumer({
 				queueARN,
-				handler: async (message: Message) => {
-					return true
+				handler: async () => {
+					return true;
 				},
 				hooks: {
-					onMessage: "foo" as any
-				}
+					// biome-ignore lint/suspicious/noExplicitAny: type is not important here
+					onMessage: "foo" as any,
+				},
 			});
-		}, "onMessage must be a function")
+		}, "onMessage must be a function");
 	});
 
 	await t.test("Not start a started consumer", async (t) => {
 		const consumer = new SQSConsumer({
 			queueARN,
-			handler: async (message: Message) => {
-				return {success: true};
+			handler: async () => {
+				return { success: true };
 			},
 			clientOptions: {
 				endpoint: process.env.LOCALSTACK_ENDPOINT,
-				signer
+				signer,
 			},
 			consumerOptions: {
 				waitTimeSeconds: 1,
-			}
+			},
 		});
 
 		t.teardown(async () => {
@@ -225,16 +244,16 @@ test("sqs-consumer class Errors", {only: true}, async (t) => {
 	await t.test("Not start a destroyed consumer", async (t) => {
 		const consumer = new SQSConsumer({
 			queueARN,
-			handler: async (message: Message) => {
-				return {success: true};
+			handler: async () => {
+				return { success: true };
 			},
 			clientOptions: {
 				endpoint: process.env.LOCALSTACK_ENDPOINT,
-				signer: new Signer()
+				signer: new Signer(),
 			},
 			consumerOptions: {
 				waitTimeSeconds: 1,
-			}
+			},
 		});
 
 		await consumer.stop(true);
@@ -244,16 +263,16 @@ test("sqs-consumer class Errors", {only: true}, async (t) => {
 		const consumer = new SQSConsumer({
 			queueARN,
 			autostart: false,
-			handler: async (message: Message) => {
-				return {success: true};
+			handler: async () => {
+				return { success: true };
 			},
 			clientOptions: {
 				endpoint: process.env.LOCALSTACK_ENDPOINT,
-				signer
+				signer,
 			},
 			consumerOptions: {
 				waitTimeSeconds: 1,
-			}
+			},
 		});
 		await t.rejects(consumer.stop(), "Consumer is not running");
 	});
