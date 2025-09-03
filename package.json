@@ -56,12 +56,12 @@
 		]
 	},
 	"dependencies": {
-		"@fgiova/mini-sqs-client": "^3.2.1",
+		"@fgiova/mini-sqs-client": "^3.2.2",
 		"@watchable/unpromise": "^1.0.2",
 		"p-map": "^7.0.3"
 	},
 	"peerDependencies": {
-		"@fgiova/aws-signature": "^3.1.0"
+		"@fgiova/aws-signature": "^3.1.2"
 	},
 	"devDependencies": {
 		"@aws-sdk/client-sqs": "^3.758.0",
