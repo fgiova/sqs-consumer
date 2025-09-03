@@ -1,3 +1,10 @@
+## [2.1.2](https://github.com/fgiova/sqs-consumer/compare/2.1.1...2.1.2) (2025-09-03)
+
+
+### Bug Fixes
+
+* fix cjs exports ([51030e2](https://github.com/fgiova/sqs-consumer/commit/51030e2a1acf3cbaee63be1d4b01aa0f8240ac3a))
+
 ## [2.1.1](https://github.com/fgiova/sqs-consumer/compare/2.1.0...2.1.1) (2025-09-03)
 
 
