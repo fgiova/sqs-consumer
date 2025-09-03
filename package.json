@@ -1,81 +1,81 @@
 {
-  "name": "@fgiova/sqs-consumer",
-  "version": "2.1.1",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": {
-        "types": "./dist/esm/index.d.mts",
-        "default": "./dist/esm/index.mjs"
-      },
-      "require": {
-        "types": "./dist/cjs/index.d.ts",
-        "default": "./dist/cjs/index.js"
-      }
-    }
-  },
-  "files": [
-    "dist"
-  ],
-  "scripts": {
-    "clean": "rimraf dist",
-    "preBuild": "npm run clean",
-    "build": "esmBuilder",
-    "lint": "biome ci ./src ./test",
-    "fix": "biome check --write ./src ./test",
-    "test": "tap",
-    "test:debug": "tap --only --timeout=0",
-    "test:coverage": "tap --coverage-report=lcovonly --coverage-report=text",
-    "test:local": "TEST_LOCAL=true tap"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/fgiova/sqs-consumer.git"
-  },
-  "author": "Francesco Giovannini <fgiova@fgiova.com>",
-  "license": "MIT",
-  "keywords": [
-    "aws",
-    "sqs",
-    "sqs-consumer"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
-  "engines": {
-    "node": ">=20.0.0"
-  },
-  "tap": {
-    "show-full-coverage": true,
-    "before": "./test/scripts/executors/before.js",
-    "after": "./test/scripts/executors/teardown.js",
-    "exclude": [
-      "test/helpers/**/*",
-      "test/scripts/**/*"
-    ]
-  },
-  "dependencies": {
-    "@fgiova/mini-sqs-client": "^3.2.0",
-    "@watchable/unpromise": "^1.0.2",
-    "p-map": "^7.0.3"
-  },
-  "peerDependencies": {
-    "@fgiova/aws-signature": "^3.1.0"
-  },
-  "devDependencies": {
-    "@aws-sdk/client-sqs": "^3.758.0",
-    "@biomejs/biome": "2.2.2",
-    "@fgiova/cjs-esm-ts-builder": "^1.2.0",
-    "@semantic-release/changelog": "^6.0.3",
-    "@semantic-release/git": "^10.0.1",
-    "@tsconfig/node20": "^20.1.4",
-    "@types/node": "^20.17.23",
-    "conventional-changelog-conventionalcommits": "^8.0.0",
-    "semantic-release": "^24.2.3",
-    "tap": "^21.1.0",
-    "testcontainers": "^11.5.1",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.8.2"
-  }
+	"name": "@fgiova/sqs-consumer",
+	"version": "2.1.1",
+	"main": "./dist/cjs/index.js",
+	"types": "./dist/cjs/index.d.ts",
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/esm/index.d.mts",
+				"default": "./dist/esm/index.mjs"
+			},
+			"require": {
+				"types": "./dist/cjs/index.d.ts",
+				"default": "./dist/cjs/index.js"
+			}
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"clean": "rimraf dist",
+		"preBuild": "npm run clean",
+		"build": "esmBuilder",
+		"lint": "biome ci ./src ./test",
+		"fix": "biome check --write ./src ./test",
+		"test": "tap",
+		"test:debug": "tap --only --timeout=0",
+		"test:coverage": "tap --coverage-report=lcovonly --coverage-report=text",
+		"test:local": "TEST_LOCAL=true tap"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/fgiova/sqs-consumer.git"
+	},
+	"author": "Francesco Giovannini <fgiova@fgiova.com>",
+	"license": "MIT",
+	"keywords": [
+		"aws",
+		"sqs",
+		"sqs-consumer"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"engines": {
+		"node": ">=20.0.0"
+	},
+	"tap": {
+		"show-full-coverage": true,
+		"before": "./test/scripts/executors/before.js",
+		"after": "./test/scripts/executors/teardown.js",
+		"exclude": [
+			"test/helpers/**/*",
+			"test/scripts/**/*"
+		]
+	},
+	"dependencies": {
+		"@fgiova/mini-sqs-client": "^3.2.1",
+		"@watchable/unpromise": "^1.0.2",
+		"p-map": "^7.0.3"
+	},
+	"peerDependencies": {
+		"@fgiova/aws-signature": "^3.1.0"
+	},
+	"devDependencies": {
+		"@aws-sdk/client-sqs": "^3.758.0",
+		"@biomejs/biome": "2.2.2",
+		"@fgiova/cjs-esm-ts-builder": "^1.2.0",
+		"@semantic-release/changelog": "^6.0.3",
+		"@semantic-release/git": "^10.0.1",
+		"@tsconfig/node20": "^20.1.4",
+		"@types/node": "^20.17.23",
+		"conventional-changelog-conventionalcommits": "^8.0.0",
+		"semantic-release": "^24.2.3",
+		"tap": "^21.1.0",
+		"testcontainers": "^11.5.1",
+		"ts-node": "^10.9.2",
+		"typescript": "^5.8.2"
+	}
 }
