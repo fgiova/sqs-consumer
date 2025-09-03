@@ -1,4 +1,5 @@
-// @ts-expect-error
+// biome-ignore lint/suspicious/noTsIgnore: is a Test file
+// @ts-ignore
 import "../helpers/localtest";
 import { setTimeout } from "node:timers/promises";
 import { SignerSingleton } from "@fgiova/aws-signature";
@@ -6,7 +7,8 @@ import { type Message, MiniSQSClient } from "@fgiova/mini-sqs-client";
 import { teardown, test } from "tap";
 import { SQSConsumer } from "../../src";
 import type { HookName } from "../../src/hooks";
-// @ts-expect-error
+// biome-ignore lint/suspicious/noTsIgnore: is a Test file
+// @ts-ignore
 import { sqsPurge } from "../helpers/sqsMessage";
 
 const queueARN = "arn:aws:sqs:eu-central-1:000000000000:test-queue-hooks";

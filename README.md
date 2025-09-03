@@ -58,12 +58,13 @@ const consumer = new SQSConsumer({
 | destroySigner    | boolean                | false   | Whether to destroy the signer when the consumer is destroyed.                                             |
 
 ### ConsumerOptions
-| Option                  | Type     | Default | Description                                                |
-|-------------------------|----------|---------|------------------------------------------------------------|
-| visibilityTimeout       | number   | 30      | The visibility timeout for the messages in seconds         |
-| waitTimeSeconds         | number   | 20      | The wait time for the receiveMessage call in seconds       |
-| itemsPerRequest         | number   | 10      | The maximum number of messages to be received at once      |
-| messageAttributeNames   | string[] | []      | The message attribute names to be included in the response |
+| Option                | Type     | Default | Description                                                |
+|-----------------------|----------|---------|------------------------------------------------------------|
+| visibilityTimeout     | number   | 30      | The visibility timeout for the messages in seconds         |
+| waitTimeSeconds       | number   | 20      | The wait time for the receiveMessage call in seconds       |
+| itemsPerRequest       | number   | 10      | The maximum number of messages to be received at once      |
+| messageAttributeNames | string[] | []      | The message attribute names to be included in the response |
+| attributeNames        | string[] | []      | The attribute names to be included in the response         |
 
 ### Hooks
 | Option           | Type                                                                  | Description                                                          |

@@ -131,7 +131,11 @@ export class Hooks {
 		...args: any[]
 	) {
 		for (const fn of this.hooks[hookSymbol.S]) {
-			message = await fn(message, ...args);
+			const returnMessage = await fn(message, ...args);
+
+			if (returnMessage) {
+				message = returnMessage;
+			}
 		}
 		return message;
 	}
@@ -143,7 +147,7 @@ export class Hooks {
 	) {
 		for (const fn of this.hooks[hookSymbol.S]) {
 			const continueLoop = await fn(...args);
-			if (!continueLoop) {
+			if (continueLoop === false) {
 				return false;
 			}
 		}

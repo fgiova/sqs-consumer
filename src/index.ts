@@ -31,20 +31,40 @@ type ConsumerOptions = {
 	waitTimeSeconds?: number;
 	itemsPerRequest?: number;
 	messageAttributeNames?: string[];
+	attributeNames?: string[];
 };
 
-type HooksOptions = {
-	onPoll?: (messages: Message[]) => Promise<Message[]>;
-	onMessage?: (message: Message) => Promise<Message>;
-	onHandlerSuccess?: (message: Message) => Promise<Message>;
-	onHandlerTimeout?: (message: Message) => Promise<boolean>;
-	onHandlerError?: (message: Message, error: Error) => Promise<boolean>;
-	onSuccess?: (message: Message) => Promise<boolean>;
+type hookReturnMessages =
+	| Promise<Message[]>
+	| Message[]
+	| Promise<void>
+	| void
+	| undefined;
+type hookReturnMessage =
+	| Promise<Message>
+	| Message
+	| Promise<void>
+	| void
+	| undefined;
+type hookReturnBoolean =
+	| Promise<boolean>
+	| boolean
+	| Promise<void>
+	| void
+	| undefined;
+
+export type HooksOptions = {
+	onPoll?: (messages: Message[]) => hookReturnMessages;
+	onMessage?: (message: Message) => hookReturnMessage;
+	onHandlerSuccess?: (message: Message) => hookReturnMessage;
+	onHandlerTimeout?: (message: Message) => hookReturnBoolean;
+	onHandlerError?: (message: Message, error: Error) => hookReturnBoolean;
+	onSuccess?: (message: Message) => hookReturnBoolean;
 	onError?: (
 		hook: HookName,
 		message: Message,
 		error: Error,
-	) => Promise<boolean>;
+	) => hookReturnBoolean;
 	onSQSError?: (error: Error, message?: Message) => Promise<void>;
 };
 
@@ -99,6 +119,7 @@ export class SQSConsumer {
 			itemsPerRequest: options.consumerOptions?.itemsPerRequest ?? 10,
 			messageAttributeNames:
 				options.consumerOptions?.messageAttributeNames ?? [],
+			attributeNames: options.consumerOptions?.attributeNames ?? [],
 		};
 		this.sqsClient =
 			options.clientOptions?.sqsClient ??
@@ -158,7 +179,7 @@ export class SQSConsumer {
 			} else {
 				handlerResult = await handler(message);
 			}
-			await Promise.all([this.hooks.runHook("onHandlerSuccess", message)]);
+			await this.hooks.runHook("onHandlerSuccess", message);
 			return handlerResult;
 		} catch (error) {
 			if (error instanceof TimeoutError) {
@@ -237,6 +258,7 @@ export class SQSConsumer {
 					MaxNumberOfMessages: this.consumerOptions.itemsPerRequest,
 					VisibilityTimeout: visibilityTimeout,
 					MessageAttributeNames: this.consumerOptions.messageAttributeNames,
+					AttributeNames: this.consumerOptions.attributeNames,
 				},
 			);
 			/* c8 ignore next 1 */
@@ -303,42 +325,46 @@ export class SQSConsumer {
 		}
 	}
 
+	/* c8 ignore next 3 */
+	public get isRunning() {
+		return this.running;
+	}
+
 	public addHook(
 		hookName: "onPoll",
 		value: (messages: Message[]) => Promise<Message[]>,
-	): void;
+	): this;
 	public addHook(
 		hookName: "onMessage",
 		value: (message: Message) => Promise<Message>,
-	): void;
-	// eslint-disable-next-line @typescript-eslint/unified-signatures
+	): this;
 	public addHook(
 		hookName: "onHandlerSuccess",
 		value: (message: Message) => Promise<Message>,
-	): void;
+	): this;
 	public addHook(
 		hookName: "onHandlerTimeout",
 		value: (message: Message) => Promise<boolean>,
-	): void;
+	): this;
 	public addHook(
 		hookName: "onHandlerError",
 		value: (message: Message, error: Error) => Promise<boolean>,
-	): void;
-	// eslint-disable-next-line @typescript-eslint/unified-signatures
+	): this;
 	public addHook(
 		hookName: "onSuccess",
 		value: (message: Message) => Promise<boolean>,
-	): void;
+	): this;
 	public addHook(
 		hookName: "onError",
 		value: (hook: HookName, message: Message, error: Error) => Promise<boolean>,
-	): void;
+	): this;
 	public addHook(
 		hookName: "onSQSError",
 		value: (error: Error, message?: Message) => Promise<void>,
-	): void;
-	public addHook(hookName: HookName, value: Function): void;
+	): this;
+	public addHook(hookName: HookName, value: Function): this;
 	public addHook(hookName: HookName, value: Function) {
-		return this.hooks.addHook(hookName, value);
+		this.hooks.addHook(hookName, value);
+		return this;
 	}
 }
