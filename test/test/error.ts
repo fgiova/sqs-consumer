@@ -1,4 +1,5 @@
-// @ts-expect-error
+// biome-ignore lint/suspicious/noTsIgnore: is a Test file
+// @ts-ignore
 import "../helpers/localtest";
 import { setTimeout } from "node:timers/promises";
 import { Signer } from "@fgiova/aws-signature";
@@ -159,7 +160,7 @@ test("sqs-consumer class Errors", { only: true }, async (t) => {
 			consumer.addHook("onSQSError", async (error: Error) => {
 				try {
 					resolve(JSON.parse(error.message).message);
-				} catch (e) {
+				} catch (_e) {
 					resolve(error.message);
 				}
 
