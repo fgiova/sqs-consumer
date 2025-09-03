@@ -1,3 +1,10 @@
+## [2.1.1](https://github.com/fgiova/sqs-consumer/compare/2.1.0...2.1.1) (2025-09-03)
+
+
+### Bug Fixes
+
+* fix hook types and add attributeNames to consumer options ([50fee57](https://github.com/fgiova/sqs-consumer/commit/50fee5747f16d58f6ba4da7157d5f4a52e0969af))
+
 # [2.1.0](https://github.com/fgiova/sqs-consumer/compare/2.0.1...2.1.0) (2025-09-02)
 
 
