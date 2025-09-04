@@ -1,3 +1,10 @@
+## [2.1.4](https://github.com/fgiova/sqs-consumer/compare/2.1.3...2.1.4) (2025-09-04)
+
+
+### Bug Fixes
+
+* fix delete after consume messages ([f12128e](https://github.com/fgiova/sqs-consumer/commit/f12128e6bb420f1874779c3ce4b6d735551908c8))
+
 ## [2.1.3](https://github.com/fgiova/sqs-consumer/compare/2.1.2...2.1.3) (2025-09-03)
 
 
