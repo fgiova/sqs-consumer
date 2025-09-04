@@ -44,7 +44,7 @@
 		"access": "public"
 	},
 	"engines": {
-		"node": ">=20.0.0"
+		"node": ">=20.14.1"
 	},
 	"tap": {
 		"show-full-coverage": true,

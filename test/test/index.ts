@@ -69,6 +69,40 @@ test("sqs-consumer class", { only: true }, async (t) => {
 		await t.resolves(message);
 		t.same(await message, messageToSend.MessageBody);
 	});
+
+	await t.test("simple get message from queue handler return a void response", async (t) => {
+		const { client } = t.context;
+
+		// biome-ignore lint/suspicious/noExplicitAny: type is not important here
+		let handler: (message: Message) => Promise<any>;
+		const messageToSend = {
+			MessageBody: "Hello World!",
+		};
+		const message = new Promise((resolve) => {
+			handler = async (message: Message) => {
+				resolve(message.Body);
+			};
+		});
+
+		await client.sendMessage(queueARN, messageToSend);
+
+		const consumer = new SQSConsumer({
+			queueARN,
+			// @ts-expect-error
+			handler,
+			autostart: false,
+			clientOptions: {
+				endpoint: process.env.LOCALSTACK_ENDPOINT,
+			},
+		});
+		t.teardown(async () => {
+			await teardownConsumer(consumer);
+		});
+		await consumer.start();
+		await t.resolves(message);
+		t.same(await message, messageToSend.MessageBody);
+	});
+
 	await t.test("simple get message from queue - no timeout", async (t) => {
 		const { client } = t.context;
 

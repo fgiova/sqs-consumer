@@ -224,12 +224,13 @@ export class SQSConsumer {
 		const candidatesToDelete: string[] = [];
 		const candidateToRelease: string[] = [];
 		for (const result of messagesResults) {
-			if (result.result && this.handlerOptions.deleteMessage !== false) {
-				// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
-				candidatesToDelete.push(result.message.ReceiptHandle!);
-			} else if (result.error) {
+			if (result.error) {
 				// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
 				candidateToRelease.push(result.message.ReceiptHandle!);
+			}
+			else if (this.handlerOptions.deleteMessage !== false) {
+				// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
+				candidatesToDelete.push(result.message.ReceiptHandle!);
 			}
 			if (candidatesToDelete.length)
 				await this.sqsClient.deleteMessageBatch(
