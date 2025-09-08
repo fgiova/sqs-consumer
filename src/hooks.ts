@@ -3,6 +3,8 @@ import type { Message } from "@fgiova/mini-sqs-client";
 import type { Logger } from "./logger";
 
 export type HookName =
+	| "onStart"
+	| "onStop"
 	| "onPoll"
 	| "onMessage"
 	| "onHandlerSuccess"
@@ -20,6 +22,16 @@ type HookSymbolData = {
 
 export class Hooks {
 	private readonly hookSymbols: Record<HookName, HookSymbolData> = {
+		onStart: {
+			S: Symbol("start"),
+			throwable: false,
+			type: "void",
+		},
+		onStop: {
+			S: Symbol("stop"),
+			throwable: false,
+			type: "void",
+		},
 		onPoll: {
 			S: Symbol("poll"),
 			throwable: true,
@@ -68,6 +80,8 @@ export class Hooks {
 	constructor(logger: Logger = console) {
 		this.logger = logger;
 		this.hooks = {
+			[this.hookSymbols.onStart.S]: [],
+			[this.hookSymbols.onStop.S]: [],
 			[this.hookSymbols.onPoll.S]: [],
 			[this.hookSymbols.onMessage.S]: [],
 			[this.hookSymbols.onHandlerSuccess.S]: [],

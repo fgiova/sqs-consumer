@@ -227,8 +227,7 @@ export class SQSConsumer {
 			if (result.error) {
 				// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
 				candidateToRelease.push(result.message.ReceiptHandle!);
-			}
-			else if (this.handlerOptions.deleteMessage !== false) {
+			} else if (this.handlerOptions.deleteMessage !== false) {
 				// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
 				candidatesToDelete.push(result.message.ReceiptHandle!);
 			}
@@ -308,21 +307,29 @@ export class SQSConsumer {
 
 	// eslint-disable-next-line @typescript-eslint/require-await
 	public async start() {
-		if (this.running) throw new Error("Consumer is already running");
-		if (this.destroyed) throw new Error("Consumer is destroyed");
-		this.running = true;
-		void this.pollMessages();
+		try {
+			if (this.running) throw new Error("Consumer is already running");
+			if (this.destroyed) throw new Error("Consumer is destroyed");
+			this.running = true;
+			void this.pollMessages();
+		} finally {
+			await this.hooks.runHook("onStart", this);
+		}
 	}
 
 	public async stop(destroy = false) {
-		if (!this.running) throw new Error("Consumer is not running");
-		this.running = false;
-		while (this.messagesOnFly > 0 || this.polling) {
-			await setTimeoutAsync(500);
-		}
-		if (destroy) {
-			await this.sqsClient.destroy(this.clientOptions.destroySigner);
-			this.destroyed = true;
+		try {
+			if (!this.running) throw new Error("Consumer is not running");
+			this.running = false;
+			while (this.messagesOnFly > 0 || this.polling) {
+				await setTimeoutAsync(500);
+			}
+			if (destroy) {
+				await this.sqsClient.destroy(this.clientOptions.destroySigner);
+				this.destroyed = true;
+			}
+		} finally {
+			await this.hooks.runHook("onStop", this);
 		}
 	}
 
@@ -330,7 +337,14 @@ export class SQSConsumer {
 	public get isRunning() {
 		return this.running;
 	}
-
+	public addHook(
+		hookName: "onStart",
+		value: (sqsConsumer: SQSConsumerOptions) => void,
+	): this;
+	public addHook(
+		hookName: "onStop",
+		value: (sqsConsumer: SQSConsumerOptions) => void,
+	): this;
 	public addHook(
 		hookName: "onPoll",
 		value: (messages: Message[]) => Promise<Message[]>,
