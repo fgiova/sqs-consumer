@@ -1,3 +1,10 @@
+# [2.2.0](https://github.com/fgiova/sqs-consumer/compare/2.1.4...2.2.0) (2025-09-08)
+
+
+### Features
+
+* update aws-signature dependency ([28781d8](https://github.com/fgiova/sqs-consumer/commit/28781d8c559092717962ccff7b15f298baee7bdc))
+
 ## [2.1.4](https://github.com/fgiova/sqs-consumer/compare/2.1.3...2.1.4) (2025-09-04)
 
 
