@@ -56,7 +56,7 @@
 		]
 	},
 	"dependencies": {
-		"@fgiova/mini-sqs-client": "^3.3.0",
+		"@fgiova/mini-sqs-client": "^3.4.0",
 		"@watchable/unpromise": "^1.0.2",
 		"p-map": "^7.0.3"
 	},

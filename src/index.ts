@@ -70,8 +70,7 @@ export type HooksOptions = {
 
 export type SQSConsumerOptions = {
 	queueARN: string;
-	// biome-ignore lint/suspicious/noExplicitAny: type is unpredictable here
-	handler: (message: Message) => Promise<any>;
+	handler: (message: Message) => Promise<unknown>;
 	logger?: Logger;
 	autostart?: boolean;
 	handlerOptions?: HandlerOptions;
@@ -87,8 +86,7 @@ export class SQSConsumer {
 	private readonly consumerOptions: ConsumerOptions;
 	private readonly sqsClient: MiniSQSClient;
 	private readonly hooks: Hooks;
-	// biome-ignore lint/suspicious/noExplicitAny: type is unpredictable here
-	private readonly messageHandler: (message: Message) => Promise<any>;
+	private readonly messageHandler: (message: Message) => Promise<unknown>;
 	private messagesOnFly: number = 0;
 	private running: boolean = false;
 	private polling: boolean = false;
@@ -129,6 +127,7 @@ export class SQSConsumer {
 				options.clientOptions?.undiciOptions,
 				options.clientOptions?.signer,
 			);
+
 		if (options.hooks) {
 			for (const [key, value] of Object.entries(options.hooks)) {
 				if (typeof value !== "function")
@@ -136,7 +135,9 @@ export class SQSConsumer {
 				this.addHook(key as HookName, value);
 			}
 		}
+
 		this.messageHandler = options.handler;
+
 		if (options.autostart !== false) {
 			void this.start();
 		}
@@ -167,7 +168,7 @@ export class SQSConsumer {
 		try {
 			let handlerResult: unknown;
 			if (this.handlerOptions.executionTimeout) {
-				const response = await Unpromise.race([
+				handlerResult = await Unpromise.race([
 					handler(message),
 					new Promise((_resolve, reject) => {
 						setTimeout(() => {
@@ -175,7 +176,6 @@ export class SQSConsumer {
 						}, this.handlerOptions.executionTimeout);
 					}),
 				]);
-				handlerResult = response;
 			} else {
 				handlerResult = await handler(message);
 			}
@@ -305,7 +305,6 @@ export class SQSConsumer {
 		await this.pollMessages();
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
 	public async start() {
 		try {
 			if (this.running) throw new Error("Consumer is already running");
@@ -337,6 +336,7 @@ export class SQSConsumer {
 	public get isRunning() {
 		return this.running;
 	}
+
 	public addHook(
 		hookName: "onStart",
 		value: (sqsConsumer: SQSConsumerOptions) => void,
