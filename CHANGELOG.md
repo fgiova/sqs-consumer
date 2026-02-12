@@ -1,3 +1,17 @@
+## [2.2.1](https://github.com/fgiova/sqs-consumer/compare/2.2.0...2.2.1) (2025-09-08)
+
+
+### Bug Fixes
+
+* better support to undici mocks ([6f208d4](https://github.com/fgiova/sqs-consumer/commit/6f208d45b633e9a0edcc84b6293a0ed83f3eeb80))
+
+# [2.2.0](https://github.com/fgiova/sqs-consumer/compare/2.1.4...2.2.0) (2025-09-08)
+
+
+### Features
+
+* update aws-signature dependency ([28781d8](https://github.com/fgiova/sqs-consumer/commit/28781d8c559092717962ccff7b15f298baee7bdc))
+
 ## [2.1.4](https://github.com/fgiova/sqs-consumer/compare/2.1.3...2.1.4) (2025-09-04)
 
 

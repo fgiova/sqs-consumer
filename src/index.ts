@@ -41,8 +41,7 @@ export type HooksOptions = {
 
 export type SQSConsumerOptions = {
 	queueARN: string;
-	// biome-ignore lint/suspicious/noExplicitAny: type is unpredictable here
-	handler: (message: Message) => Promise<any>;
+	handler: (message: Message) => Promise<unknown>;
 	logger?: Logger;
 	autostart?: boolean;
 	handlerOptions?: HandlerOptions;
@@ -58,8 +57,7 @@ export class SQSConsumer {
 	private readonly consumerOptions: ConsumerOptions;
 	private readonly sqsClient: MiniSQSClient;
 	private readonly hooks: Hooks;
-	// biome-ignore lint/suspicious/noExplicitAny: type is unpredictable here
-	private readonly messageHandler: (message: Message) => Promise<any>;
+	private readonly messageHandler: (message: Message) => Promise<unknown>;
 	private messagesOnFly: number = 0;
 	private running: boolean = false;
 	private polling: boolean = false;
@@ -100,6 +98,7 @@ export class SQSConsumer {
 				options.clientOptions?.undiciOptions,
 				options.clientOptions?.signer,
 			);
+
 		if (options.hooks) {
 			for (const [key, value] of Object.entries(options.hooks)) {
 				if (typeof value !== "function")
@@ -108,7 +107,9 @@ export class SQSConsumer {
 				this.addHook(key as HookName, value as any);
 			}
 		}
+
 		this.messageHandler = options.handler;
+
 		if (options.autostart !== false) {
 			void this.start();
 		}
@@ -294,7 +295,6 @@ export class SQSConsumer {
 		}
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
 	public async start() {
 		try {
 			if (this.running) throw new Error("Consumer is already running");
