@@ -99,3 +99,4 @@ dist/
 .nyc_output/
 !/.env.dev
 /.tap/
+.plans/

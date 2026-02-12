@@ -350,4 +350,106 @@ test("sqs-consumer hooks", { only: true }, async (t) => {
 		t.same(message.Body, messageToSend.MessageBody);
 		t.same(message.MD5OfBody, messageSent.MD5OfMessageBody);
 	});
+
+	t.test("onStart hook", async (t) => {
+		const consumer = new SQSConsumer({
+			queueARN,
+			handler: async () => {
+				return { success: true };
+			},
+			autostart: false,
+			handlerOptions: {
+				executionTimeout: 0,
+			},
+			consumerOptions: {
+				waitTimeSeconds: 1,
+			},
+			clientOptions: {
+				endpoint: process.env.LOCALSTACK_ENDPOINT,
+			},
+		});
+
+		const startPromise = new Promise<boolean>((resolve) => {
+			consumer.addHook("onStart", async () => {
+				resolve(true);
+			});
+		});
+		t.teardown(async () => {
+			await teardownConsumer(consumer);
+		});
+		await consumer.start();
+		await t.resolves(startPromise);
+		t.equal(await startPromise, true);
+	});
+
+	t.test("onStop hook", async (t) => {
+		const consumer = new SQSConsumer({
+			queueARN,
+			handler: async () => {
+				return { success: true };
+			},
+			autostart: false,
+			handlerOptions: {
+				executionTimeout: 0,
+			},
+			consumerOptions: {
+				waitTimeSeconds: 1,
+			},
+			clientOptions: {
+				endpoint: process.env.LOCALSTACK_ENDPOINT,
+			},
+		});
+
+		const stopPromise = new Promise<boolean>((resolve) => {
+			consumer.addHook("onStop", async () => {
+				resolve(true);
+			});
+		});
+		await consumer.start();
+		await consumer.stop();
+		await sqsPurge(queueARN);
+		await t.resolves(stopPromise);
+		t.equal(await stopPromise, true);
+	});
+
+	t.test("onSuccess hook (boolean return)", async (t) => {
+		const { client } = t.context;
+
+		const messageToSend = {
+			MessageBody: "Hello World!",
+		};
+
+		const messageSent = await client.sendMessage(queueARN, messageToSend);
+
+		const consumer = new SQSConsumer({
+			queueARN,
+			handler: async () => {
+				return { success: true };
+			},
+			autostart: false,
+			handlerOptions: {
+				executionTimeout: 0,
+			},
+			consumerOptions: {
+				waitTimeSeconds: 1,
+			},
+			clientOptions: {
+				endpoint: process.env.LOCALSTACK_ENDPOINT,
+			},
+		});
+		t.teardown(async () => {
+			await teardownConsumer(consumer);
+		});
+		const messagePromise = new Promise<Message>((resolve) => {
+			consumer.addHook("onSuccess", async (message: Message) => {
+				resolve(message);
+				return true;
+			});
+		});
+		await consumer.start();
+		await t.resolves(messagePromise);
+		const message = await messagePromise;
+		t.same(message.Body, messageToSend.MessageBody);
+		t.same(message.MD5OfBody, messageSent.MD5OfMessageBody);
+	});
 });

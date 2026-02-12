@@ -39,15 +39,15 @@ const consumer = new SQSConsumer({
 | handlerOptions  | HandlerOptions                      |         | The options for the handler                        |
 | clientOptions   | ClientOptions                       |         | The options for the client                         |
 | consumerOptions | ConsumerOptions                     |         | The options for the consumer                       |
-| hooks           | Hooks                               |         | The hooks to be called on specific events          |
+| hooks           | HooksOptions                        |         | The hooks to be called on specific events          |
 
 ### HandlerOptions
-| Option            | Type    | Default | Description                                                                                              |
-|-------------------|---------|---------|----------------------------------------------------------------------------------------------------------|
-| deleteMessage     | boolean | true    | Whether to delete the message after handling (if handler execute without any error)                      |
-| extendVisibility  | boolean | true    | Whether to extend the visibility timeout during message handling                                         |
-| excuteTimeout     | number  | 30000   | The timeout for the handler execution in ms                                                              |
-| parallelExecution | boolean | true    | If true execute handler in parallel for each batch of messages received, otherwise execute consecutively |
+| Option                  | Type    | Default | Description                                                                                              |
+|-------------------------|---------|---------|----------------------------------------------------------------------------------------------------------|
+| deleteMessage           | boolean | true    | Whether to delete the message after handling (if handler execute without any error)                      |
+| extendVisibilityTimeout | boolean | true    | Whether to extend the visibility timeout during message handling                                         |
+| executionTimeout        | number  | 30000   | The timeout for the handler execution in ms                                                              |
+| parallelExecution       | boolean | true    | If true execute handler in parallel for each batch of messages received, otherwise execute consecutively |
 
 ### ClientOptions
 | Option           | Type                   | Default | Description                                                                                               |
@@ -56,7 +56,7 @@ const consumer = new SQSConsumer({
 | endpoint         | string                 |         | The endpoint to be used for the client. If not provided, the endpoint will be inferred from the queueARN. |
 | undiciOptions    | Pool.Options           |         | The options for the undici client.                                                                        |
 | signer           | Signer / SignerOptions |         | The signer to be used for signing requests. If not provided, a new singleton signer will be created.      |
-| destroySigner    | boolean                | false   | Whether to destroy the signer when the consumer is destroyed.                                             |
+| destroySigner    | boolean                | true    | Whether to destroy the signer when the consumer is destroyed.                                             |
 
 ### ConsumerOptions
 | Option                | Type     | Default | Description                                                |
@@ -68,17 +68,16 @@ const consumer = new SQSConsumer({
 | attributeNames        | string[] | []      | The attribute names to be included in the response         |
 
 ### Hooks
-| Option           | Type                                                                  | Description                                                          |
-|------------------|-----------------------------------------------------------------------|----------------------------------------------------------------------|
-| onPoll           | (messages: Message[]) => Promise<Message[]>                           | Called when the consumer polls for messages                          |
-| onMessage        | (message: Message) => Promise<Message>                                | Called when the consumer receives a message                          |
-| onHandle         | (message: Message) => Promise<Message>                                | Called when the consumer handles a message                           |
-| onHandlerSuccess | (message: Message) => Promise<Message>                                | Called when the consumer handles a message successfully              |
-| onHandlerTimeout | (message: Message) => Promise<Message>                                | Called when the consumer handler execution exceed executionTimeout   |
-| onHandlerError   | (message: Message, error: Error) => Promise<Boolean>                  | Called when the consumer handler execution throws an error           |
-| onSuccess        | (message: Message) => Promise<Message>                                | Called when the consumer handler execution finishes successfully     |
-| onError          | ( hook: HookName, message: Message, error: Error) => Promise<Boolean> | Called when the consumer handler execution throws an uncaught error  |
-| onSQSError       | (error: Error, message?: Message) => Promise<void>                    | Called when the consumer receives an error from the SQS service      |
+| Option           | Type                                                                  | Description                                                         |
+|------------------|-----------------------------------------------------------------------|---------------------------------------------------------------------|
+| onPoll           | (messages: Message[]) => Promise<Message[]>                           | Called when the consumer polls for messages                         |
+| onMessage        | (message: Message) => Promise<Message>                                | Called when the consumer receives a message                         |
+| onHandlerSuccess | (message: Message) => Promise<Message>                                | Called when the consumer handles a message successfully             |
+| onHandlerTimeout | (message: Message) => Promise<boolean>                                | Called when the consumer handler execution exceed executionTimeout  |
+| onHandlerError   | (message: Message, error: Error) => Promise<boolean>                  | Called when the consumer handler execution throws an error          |
+| onSuccess        | (message: Message) => Promise<boolean>                                | Called when the consumer handler execution finishes successfully    |
+| onError          | (hook: HookName, message: Message, error: Error) => Promise<boolean>  | Called when the consumer handler execution throws an uncaught error |
+| onSQSError       | (error: Error, message?: Message) => Promise<void>                    | Called when the consumer receives an error from the SQS service     |
 
 ## API
 
@@ -86,7 +85,7 @@ const consumer = new SQSConsumer({
 SQSConsumer(options: SQSConsumerOptions)
 SQSConsumer.start(): Promise<void>
 SQSConsumer.stop(destroyConsumer = false): Promise<void>
-SQSConsumer.addHook(hookname: string, func: Function): void
+SQSConsumer.addHook<H extends HookName>(hookName: H, value: HookCallback<H>): this
 ```
 
 ## License

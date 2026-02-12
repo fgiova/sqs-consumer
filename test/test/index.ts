@@ -383,4 +383,112 @@ test("sqs-consumer class", { only: true }, async (t) => {
 		await t.resolves(message);
 		t.same(await message, messageToSend.MessageBody);
 	});
+
+	await t.test("isRunning getter", async (t) => {
+		const consumer = new SQSConsumer({
+			queueARN,
+			handler: async () => {
+				return { success: true };
+			},
+			autostart: false,
+			clientOptions: {
+				endpoint: process.env.LOCALSTACK_ENDPOINT,
+			},
+			consumerOptions: {
+				waitTimeSeconds: 1,
+			},
+		});
+		t.equal(consumer.isRunning, false);
+		await consumer.start();
+		t.equal(consumer.isRunning, true);
+		await consumer.stop();
+		t.equal(consumer.isRunning, false);
+	});
+
+	await t.test(
+		"simple get message from queue - deleteMessage false",
+		async (t) => {
+			const { client } = t.context;
+			const messageToSend = {
+				MessageBody: "Hello World!",
+			};
+			await client.sendMessage(queueARN, messageToSend);
+
+			// biome-ignore lint/suspicious/noExplicitAny: type is not important here
+			let handler: (message: Message) => Promise<any>;
+			const message = new Promise((resolve) => {
+				handler = async (message: Message) => {
+					resolve(message.Body);
+					return { success: true };
+				};
+			});
+
+			const consumer = new SQSConsumer({
+				queueARN,
+				// @ts-expect-error
+				handler,
+				autostart: false,
+				handlerOptions: {
+					deleteMessage: false,
+				},
+				consumerOptions: {
+					waitTimeSeconds: 1,
+				},
+				clientOptions: {
+					endpoint: process.env.LOCALSTACK_ENDPOINT,
+				},
+			});
+			t.teardown(async () => {
+				await teardownConsumer(consumer);
+			});
+			await consumer.start();
+			await t.resolves(message);
+			t.same(await message, messageToSend.MessageBody);
+		},
+	);
+
+	await t.test(
+		"serial get messages from queue with handler error",
+		async (t) => {
+			const { client } = t.context;
+			const messageToSend = {
+				MessageBody: "Hello World!",
+			};
+			await client.sendMessage(queueARN, messageToSend);
+
+			const consumer = new SQSConsumer({
+				queueARN,
+				handler: async () => {
+					throw new Error("serial-error-test");
+				},
+				handlerOptions: {
+					parallelExecution: false,
+					executionTimeout: 5_000,
+				},
+				consumerOptions: {
+					waitTimeSeconds: 1,
+				},
+				clientOptions: {
+					endpoint: process.env.LOCALSTACK_ENDPOINT,
+				},
+			});
+
+			const errorMessage = new Promise<Message>((resolve) => {
+				consumer.addHook("onHandlerError", async (message: Message) => {
+					// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
+					await client.deleteMessage(queueARN, message.ReceiptHandle!);
+					resolve(message);
+					return true;
+				});
+			});
+
+			t.teardown(async () => {
+				await consumer.stop();
+				await sqsPurge(queueARN);
+			});
+
+			await t.resolves(errorMessage);
+			t.same((await errorMessage).Body, messageToSend.MessageBody);
+		},
+	);
 });

@@ -164,7 +164,7 @@ test("sqs-consumer class Errors", { only: true }, async (t) => {
 					resolve(error.message);
 				}
 
-				return true;
+				return;
 			});
 		});
 		t.teardown(async () => {

@@ -1,6 +1,7 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: ignore visibility for hooks */
 import { setTimeout } from "node:timers/promises";
 import { test } from "tap";
+import { TimeoutError } from "../../src/errors";
 import { Hooks } from "../../src/hooks";
 
 test("hooks class", async (t) => {
@@ -104,5 +105,58 @@ test("hooks class", async (t) => {
 	await t.test("run wrong Hook", async (t) => {
 		const hooks = new Hooks();
 		await t.rejects(hooks.runHook("onWrongHook" as any));
+	});
+
+	await t.test("TimeoutError default message", async (t) => {
+		const error = new TimeoutError();
+		t.equal(error.message, "Timeout Error");
+		t.equal(error.name, "TimeoutError");
+	});
+
+	await t.test("TimeoutError empty string message", async (t) => {
+		const error = new TimeoutError("");
+		t.equal(error.message, "Timeout Error");
+	});
+
+	await t.test("TimeoutError custom message", async (t) => {
+		const error = new TimeoutError("custom");
+		t.equal(error.message, "custom");
+	});
+
+	await t.test("runHook void return onStart", async (t) => {
+		const hooks = new Hooks() as any;
+		let called = false;
+		const fn = () => {
+			called = true;
+		};
+		hooks.addHook("onStart", fn);
+		await t.resolves(hooks.runHook("onStart"));
+		t.equal(called, true);
+	});
+
+	await t.test("runHook void return onStop", async (t) => {
+		const hooks = new Hooks() as any;
+		let called = false;
+		const fn = () => {
+			called = true;
+		};
+		hooks.addHook("onStop", fn);
+		await t.resolves(hooks.runHook("onStop"));
+		t.equal(called, true);
+	});
+
+	await t.test("onSQSError with thrown error does not propagate", async (t) => {
+		let errorCalledMessage = "";
+		const hooks = new Hooks({
+			error(error: Error) {
+				errorCalledMessage = error.message;
+			},
+		} as any);
+		const fn = async () => {
+			throw new Error("sqsError test");
+		};
+		hooks.addHook("onSQSError", fn);
+		await t.resolves(hooks.runHook("onSQSError"));
+		t.equal(errorCalledMessage, "Error running hook onSQSError: sqsError test");
 	});
 });
