@@ -1,4 +1,3 @@
-/** biome-ignore-all lint/complexity/noBannedTypes: Function required as generic */
 import { setTimeout as setTimeoutAsync } from "node:timers/promises";
 import type { Signer, SignerOptions } from "@fgiova/aws-signature";
 import { type Message, MiniSQSClient } from "@fgiova/mini-sqs-client";
@@ -8,7 +7,7 @@ import { Unpromise } from "@watchable/unpromise";
 import pMap from "p-map";
 import type { Pool } from "undici";
 import { TimeoutError } from "./errors";
-import { type HookName, Hooks } from "./hooks";
+import { type HookCallback, type HookName, Hooks } from "./hooks";
 import type { Logger } from "./logger";
 
 type HandlerOptions = {
@@ -34,38 +33,10 @@ type ConsumerOptions = {
 	attributeNames?: string[];
 };
 
-type hookReturnMessages =
-	| Promise<Message[]>
-	| Message[]
-	| Promise<void>
-	| void
-	| undefined;
-type hookReturnMessage =
-	| Promise<Message>
-	| Message
-	| Promise<void>
-	| void
-	| undefined;
-type hookReturnBoolean =
-	| Promise<boolean>
-	| boolean
-	| Promise<void>
-	| void
-	| undefined;
+type ConsumerHookName = Exclude<HookName, "onStart" | "onStop">;
 
 export type HooksOptions = {
-	onPoll?: (messages: Message[]) => hookReturnMessages;
-	onMessage?: (message: Message) => hookReturnMessage;
-	onHandlerSuccess?: (message: Message) => hookReturnMessage;
-	onHandlerTimeout?: (message: Message) => hookReturnBoolean;
-	onHandlerError?: (message: Message, error: Error) => hookReturnBoolean;
-	onSuccess?: (message: Message) => hookReturnBoolean;
-	onError?: (
-		hook: HookName,
-		message: Message,
-		error: Error,
-	) => hookReturnBoolean;
-	onSQSError?: (error: Error, message?: Message) => Promise<void>;
+	[H in ConsumerHookName]?: HookCallback<H>;
 };
 
 export type SQSConsumerOptions = {
@@ -132,7 +103,8 @@ export class SQSConsumer {
 			for (const [key, value] of Object.entries(options.hooks)) {
 				if (typeof value !== "function")
 					throw new Error(`${key} must be a function`);
-				this.addHook(key as HookName, value);
+				// biome-ignore lint/suspicious/noExplicitAny: dynamic registration loses type correlation
+				this.addHook(key as HookName, value as any);
 			}
 		}
 
@@ -153,7 +125,7 @@ export class SQSConsumer {
 				result,
 			};
 		} catch (e) {
-			await this.hooks.runHook("onError", "onMessage", message, e);
+			await this.hooks.runHook("onError", "onMessage", message, e as Error);
 			return {
 				message,
 				error: e,
@@ -165,13 +137,14 @@ export class SQSConsumer {
 		handler: typeof this.messageHandler,
 		message: Message,
 	) {
+		let timeoutId: ReturnType<typeof setTimeout> | null = null;
 		try {
 			let handlerResult: unknown;
 			if (this.handlerOptions.executionTimeout) {
 				handlerResult = await Unpromise.race([
 					handler(message),
 					new Promise((_resolve, reject) => {
-						setTimeout(() => {
+						timeoutId = setTimeout(() => {
 							reject(new TimeoutError("Handler execution timed out"));
 						}, this.handlerOptions.executionTimeout);
 					}),
@@ -185,9 +158,11 @@ export class SQSConsumer {
 			if (error instanceof TimeoutError) {
 				await this.hooks.runHook("onHandlerTimeout", message);
 			} else {
-				await this.hooks.runHook("onHandlerError", message, error);
+				await this.hooks.runHook("onHandlerError", message, error as Error);
 			}
 			throw error;
+		} /* c8 ignore next 2 */ finally {
+			if (timeoutId) clearTimeout(timeoutId);
 		}
 	}
 
@@ -209,7 +184,7 @@ export class SQSConsumer {
 							visibilityTimeout,
 						);
 					} /* c8 ignore next 3 */ catch (e) {
-						await this.hooks.runHook("onSQSError", e);
+						await this.hooks.runHook("onSQSError", e as Error);
 					}
 				},
 				visibilityTimeout * 1000 - 5,
@@ -231,78 +206,93 @@ export class SQSConsumer {
 				// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
 				candidatesToDelete.push(result.message.ReceiptHandle!);
 			}
-			if (candidatesToDelete.length)
-				await this.sqsClient.deleteMessageBatch(
-					this.queueARN,
-					candidatesToDelete,
-				);
-			if (candidateToRelease.length)
-				await this.sqsClient.changeMessageVisibilityBatch(
-					this.queueARN,
-					candidateToRelease,
-					0,
-				);
+		}
+		if (candidatesToDelete.length) {
+			await this.sqsClient.deleteMessageBatch(
+				this.queueARN,
+				candidatesToDelete,
+			);
+		}
+		if (candidateToRelease.length) {
+			await this.sqsClient.changeMessageVisibilityBatch(
+				this.queueARN,
+				candidateToRelease,
+				0,
+			);
 		}
 	}
 
 	private async pollMessages() {
-		if (!this.running) return;
-		try {
-			this.polling = true;
-			/* c8 ignore next 1 */
-			const visibilityTimeout = this.consumerOptions.visibilityTimeout ?? 30;
-			const messagesResult = await this.sqsClient.receiveMessage(
-				this.queueARN,
-				{
-					WaitTimeSeconds: this.consumerOptions.waitTimeSeconds,
-					MaxNumberOfMessages: this.consumerOptions.itemsPerRequest,
-					VisibilityTimeout: visibilityTimeout,
-					MessageAttributeNames: this.consumerOptions.messageAttributeNames,
-					AttributeNames: this.consumerOptions.attributeNames,
-				},
-			);
-			/* c8 ignore next 1 */
-			const messages = messagesResult.Messages ?? [];
-			const totalMessages = messages.length;
-			this.messagesOnFly += totalMessages;
-			await this.hooks.runHook("onPoll", messages);
-			if (messages.length) {
-				const haTimeout = this.haExtendVisibilityTimeout(
-					messages,
-					visibilityTimeout,
+		let consecutiveErrors = 0;
+		while (this.running) {
+			try {
+				this.polling = true;
+				/* c8 ignore next 1 */
+				const visibilityTimeout = this.consumerOptions.visibilityTimeout ?? 30;
+				const messagesResult = await this.sqsClient.receiveMessage(
+					this.queueARN,
+					{
+						WaitTimeSeconds: this.consumerOptions.waitTimeSeconds,
+						MaxNumberOfMessages: this.consumerOptions.itemsPerRequest,
+						VisibilityTimeout: visibilityTimeout,
+						MessageAttributeNames: this.consumerOptions.messageAttributeNames,
+						AttributeNames: this.consumerOptions.attributeNames,
+					},
 				);
-				this.messagesOnFly += messages.length - totalMessages;
-				if (this.handlerOptions.parallelExecution !== false) {
-					const results = await pMap(
+				const messages = await this.hooks.runHook(
+					"onPoll",
+					/* c8 ignore next 1 */
+					messagesResult.Messages ?? [],
+				);
+				this.messagesOnFly += messages.length;
+				if (messages.length) {
+					const haTimeout = this.haExtendVisibilityTimeout(
 						messages,
-						async (message) => {
-							return await this.runOnMessageHook(message);
-						},
-						{
-							concurrency: 10,
-							stopOnError: false,
-						},
+						visibilityTimeout,
 					);
-					await this.deleteMessages(results);
-					this.messagesOnFly -= messages.length;
-				} else {
-					const handlingMessages = [...messages];
-					for (let i = 0; i < handlingMessages.length; i++) {
-						const result = await this.runOnMessageHook(handlingMessages[i]);
-						await this.deleteMessages([result]);
-						messages.splice(i, 1);
-						this.messagesOnFly -= 1;
+					try {
+						if (this.handlerOptions.parallelExecution !== false) {
+							try {
+								const results = await pMap(
+									messages,
+									async (message) => {
+										return await this.runOnMessageHook(message);
+									},
+									{
+										concurrency: 10,
+										stopOnError: false,
+									},
+								);
+								await this.deleteMessages(results);
+							} finally {
+								this.messagesOnFly -= messages.length;
+							}
+						} else {
+							const handlingMessages = [...messages];
+							for (let i = 0; i < handlingMessages.length; i++) {
+								try {
+									const result = await this.runOnMessageHook(
+										handlingMessages[i],
+									);
+									await this.deleteMessages([result]);
+								} finally {
+									this.messagesOnFly -= 1;
+								}
+							}
+						}
+					} finally {
+						if (haTimeout) clearInterval(haTimeout);
 					}
 				}
-				if (haTimeout) clearInterval(haTimeout);
-			} else {
-				this.messagesOnFly -= totalMessages;
+				consecutiveErrors = 0;
+			} catch (e) {
+				await this.hooks.runHook("onSQSError", e as Error);
+				await setTimeoutAsync(
+					Math.min(1000 * 2 ** consecutiveErrors++, 30_000),
+				);
 			}
-		} catch (e) {
-			await this.hooks.runHook("onSQSError", e);
+			this.polling = false;
 		}
-		this.polling = false;
-		await this.pollMessages();
 	}
 
 	public async start() {
@@ -332,53 +322,10 @@ export class SQSConsumer {
 		}
 	}
 
-	/* c8 ignore next 3 */
 	public get isRunning() {
 		return this.running;
 	}
-
-	public addHook(
-		hookName: "onStart",
-		value: (sqsConsumer: SQSConsumerOptions) => void,
-	): this;
-	public addHook(
-		hookName: "onStop",
-		value: (sqsConsumer: SQSConsumerOptions) => void,
-	): this;
-	public addHook(
-		hookName: "onPoll",
-		value: (messages: Message[]) => Promise<Message[]>,
-	): this;
-	public addHook(
-		hookName: "onMessage",
-		value: (message: Message) => Promise<Message>,
-	): this;
-	public addHook(
-		hookName: "onHandlerSuccess",
-		value: (message: Message) => Promise<Message>,
-	): this;
-	public addHook(
-		hookName: "onHandlerTimeout",
-		value: (message: Message) => Promise<boolean>,
-	): this;
-	public addHook(
-		hookName: "onHandlerError",
-		value: (message: Message, error: Error) => Promise<boolean>,
-	): this;
-	public addHook(
-		hookName: "onSuccess",
-		value: (message: Message) => Promise<boolean>,
-	): this;
-	public addHook(
-		hookName: "onError",
-		value: (hook: HookName, message: Message, error: Error) => Promise<boolean>,
-	): this;
-	public addHook(
-		hookName: "onSQSError",
-		value: (error: Error, message?: Message) => Promise<void>,
-	): this;
-	public addHook(hookName: HookName, value: Function): this;
-	public addHook(hookName: HookName, value: Function) {
+	public addHook<H extends HookName>(hookName: H, value: HookCallback<H>) {
 		this.hooks.addHook(hookName, value);
 		return this;
 	}

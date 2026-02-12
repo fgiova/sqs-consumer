@@ -14,6 +14,31 @@ export type HookName =
 	| "onError"
 	| "onSQSError";
 
+export type HookSignatureMap = {
+	onStart: { args: [sqsConsumer: unknown]; return: undefined };
+	onStop: { args: [sqsConsumer: unknown]; return: undefined };
+	onPoll: { args: [messages: Message[]]; return: Message[] };
+	onMessage: { args: [message: Message]; return: Message };
+	onHandlerSuccess: { args: [message: Message]; return: Message };
+	onHandlerTimeout: { args: [message: Message]; return: boolean };
+	onHandlerError: { args: [message: Message, error: Error]; return: boolean };
+	onSuccess: { args: [message: Message]; return: boolean };
+	onError: {
+		args: [hook: HookName, message: Message, error: Error];
+		return: boolean;
+	};
+	onSQSError: { args: [error: Error, message?: Message]; return: undefined };
+};
+
+export type HookCallback<H extends HookName> = (
+	...args: HookSignatureMap[H]["args"]
+) =>
+	| HookSignatureMap[H]["return"]
+	| Promise<HookSignatureMap[H]["return"]>
+	| void
+	| Promise<void>
+	| undefined;
+
 type HookSymbolData = {
 	S: symbol;
 	throwable: boolean;
@@ -92,39 +117,54 @@ export class Hooks {
 			[this.hookSymbols.onSQSError.S]: [],
 		};
 	}
-	public addHook(hook: HookName, fn: Function) {
+	public addHook<H extends HookName>(hook: H, fn: HookCallback<H>) {
 		const hookSymbol = this.hookSymbols[hook];
 		if (!hookSymbol) throw new Error(`Invalid hook ${hook}`);
 		this.hooks[hookSymbol.S]?.push(fn);
 	}
 
-	// biome-ignore lint/suspicious/noExplicitAny: args can be anything
-	public async runHook(hook: HookName, ...args: any[]) {
+	public async runHook<H extends HookName>(
+		hook: H,
+		...args: HookSignatureMap[H]["args"]
+	): Promise<HookSignatureMap[H]["return"]> {
 		const hookSymbol = this.hookSymbols[hook];
+		// biome-ignore lint/suspicious/noExplicitAny: internal cast for generic dispatch
+		const hookArgs = args as any[];
 		try {
 			if (!hookSymbol) throw new Error(`Invalid hook ${hook}`);
 			switch (hookSymbol.type) {
 				case "boolean-return":
-					return await this.runHookWithBooleanReturn(hookSymbol, ...args);
+					return (await this.runHookWithBooleanReturn(
+						hookSymbol,
+						...hookArgs,
+					)) as HookSignatureMap[H]["return"];
 				case "message-return": {
-					const [message, ...someArgs] = args;
-					return await this.runHookWithMessageReturn(
+					const [message, ...someArgs] = hookArgs;
+					return (await this.runHookWithMessageReturn(
 						hookSymbol,
 						message,
 						...someArgs,
-					);
+					)) as HookSignatureMap[H]["return"];
 				}
 				case "void":
-					return await this.runHookWithVoidReturn(hookSymbol, ...args);
+					return (await this.runHookWithVoidReturn(
+						hookSymbol,
+						...hookArgs,
+					)) as HookSignatureMap[H]["return"];
 			}
 
-			/* c8 ignore next 1 */
 			// biome-ignore lint/suspicious/noExplicitAny: error type is not important
-		} catch (error: any) {
-			error.message = `Error running hook ${hook}: ${error.message}`;
-			if (hookSymbol.throwable !== false) throw error;
-			this.logger.error(error);
+		} catch (originalError: any) {
+			const newError = new Error(
+				/* c8 ignore next */
+				`Error running hook ${hook}: ${originalError?.message ?? originalError}`,
+			);
+			newError.cause = originalError;
+			if (hookSymbol.throwable !== false) throw newError;
+			this.logger.error(newError);
 		}
+		// biome-ignore lint/suspicious/noExplicitAny: fallthrough for non-throwable error paths
+		return undefined as any;
 	}
 
 	private async runHookWithVoidReturn(

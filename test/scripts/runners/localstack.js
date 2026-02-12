@@ -3,6 +3,9 @@ const { GenericContainer, Wait } = require("testcontainers");
 
 const startLocalStack = async () => {
 	const localStack = await new GenericContainer("localstack/localstack:latest")
+		.withLabels({
+			"org.testcontainers.reaper-session-id": process.env.REAPER_SESSION_ID, // This is mandatory for the reaper to clean up the container
+		})
 		.withExposedPorts(4566)
 		.withEnvironment({
 			SERVICES: "sqs,sns",
