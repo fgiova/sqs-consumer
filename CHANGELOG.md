@@ -1,3 +1,5 @@
+# [3.0.0](https://github.com/fgiova/sqs-consumer/compare/2.2.1...3.0.0) (2026-02-12)
+
 ## [2.2.1](https://github.com/fgiova/sqs-consumer/compare/2.2.0...2.2.1) (2025-09-08)
 
 
