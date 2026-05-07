@@ -29,6 +29,25 @@ const consumer = new SQSConsumer({
 
 ```
 
+## Handler cancellation on timeout
+
+When `handlerOptions.executionTimeout` triggers, the consumer aborts the in-flight handler via an `AbortSignal` exposed through `AsyncLocalStorage`. The handler does not need to receive the signal as an argument — it is retrieved on demand using the `getAbortSignal` helper. Pass it to any cancellable async API (`fetch`, `undici`, timers, streams) to release resources promptly and avoid zombie handlers retaining memory after a timeout.
+
+```typescript
+import { SQSConsumer, getAbortSignal } from '@fgiova/sqs-consumer'
+
+const consumer = new SQSConsumer({
+    queueARN: "arn:aws:sqs:eu-central-1:000000000000:test-queue-hooks",
+    handler: async (message) => {
+        const signal = getAbortSignal();
+        const res = await fetch("https://api.example.com/work", { signal });
+        return res.json();
+    }
+});
+```
+
+`getAbortSignal()` returns `undefined` when called outside a handler execution context. Handlers that ignore it keep working unchanged.
+
 ## Options
 | Option          | Type                                | Default | Description                                        |
 |-----------------|-------------------------------------|---------|----------------------------------------------------|
@@ -86,6 +105,7 @@ SQSConsumer(options: SQSConsumerOptions)
 SQSConsumer.start(): Promise<void>
 SQSConsumer.stop(destroyConsumer = false): Promise<void>
 SQSConsumer.addHook<H extends HookName>(hookName: H, value: HookCallback<H>): this
+getAbortSignal(): AbortSignal | undefined
 ```
 
 ## License

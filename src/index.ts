@@ -6,9 +6,12 @@ import { Unpromise } from "@watchable/unpromise";
 // @ts-expect-error
 import pMap from "p-map";
 import type { Pool } from "undici";
+import { handlerContext } from "./context";
 import { TimeoutError } from "./errors";
 import { type HookCallback, type HookName, Hooks } from "./hooks";
 import type { Logger } from "./logger";
+
+export { getAbortSignal } from "./context";
 
 type HandlerOptions = {
 	deleteMessage?: boolean;
@@ -138,19 +141,27 @@ export class SQSConsumer {
 		message: Message,
 	) {
 		let timeoutId: ReturnType<typeof setTimeout> | null = null;
+		const abortController = new AbortController();
 		try {
 			let handlerResult: unknown;
 			if (this.handlerOptions.executionTimeout) {
 				handlerResult = await Unpromise.race([
-					handler(message),
+					handlerContext.run({ signal: abortController.signal }, () =>
+						handler(message),
+					),
 					new Promise((_resolve, reject) => {
 						timeoutId = setTimeout(() => {
-							reject(new TimeoutError("Handler execution timed out"));
+							const err = new TimeoutError("Handler execution timed out");
+							abortController.abort(err);
+							reject(err);
 						}, this.handlerOptions.executionTimeout);
 					}),
 				]);
 			} else {
-				handlerResult = await handler(message);
+				handlerResult = await handlerContext.run(
+					{ signal: abortController.signal },
+					() => handler(message),
+				);
 			}
 			await this.hooks.runHook("onHandlerSuccess", message);
 			return handlerResult;

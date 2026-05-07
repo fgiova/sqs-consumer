@@ -49,6 +49,9 @@ const bootstrap = async (host, port) => {
 	await sqs.createQueue({
 		QueueName: "test-queue-hooks",
 	});
+	await sqs.createQueue({
+		QueueName: "test-queue-context",
+	});
 };
 
 module.exports = {

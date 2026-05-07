@@ -1,11 +1,13 @@
 import fs from "node:fs";
 import { Socket } from "node:net";
 import path from "node:path";
+import dotEnv from "dotenv";
 import { teardown } from "tap";
 
 const defaultExport = () => {
-	require("dotenv").config({
+	dotEnv.config({
 		path: ".env.dev",
+		quiet: true,
 	});
 	if (!process.env.TEST_LOCAL) {
 		const jsonString = fs.readFileSync(
