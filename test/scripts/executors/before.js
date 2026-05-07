@@ -26,6 +26,7 @@ const before = async () => {
 	if (!process.env.TEST_LOCAL) {
 		console.log("Start Reaper");
 		const reaperEnv = await startReaper();
+		process.env.REAPER_SESSION_ID = reaperEnv.REAPER_SESSION;
 		console.log("Start LocalStack");
 		const {
 			// biome-ignore lint/correctness/noUnusedVariables: leave for clarity

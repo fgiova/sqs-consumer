@@ -2,7 +2,7 @@ const { SQS } = require("@aws-sdk/client-sqs");
 const { GenericContainer, Wait } = require("testcontainers");
 
 const startLocalStack = async () => {
-	const localStack = await new GenericContainer("localstack/localstack:latest")
+	const localStack = await new GenericContainer("localstack/localstack:4")
 		.withLabels({
 			"org.testcontainers.reaper-session-id": process.env.REAPER_SESSION_ID, // This is mandatory for the reaper to clean up the container
 		})
@@ -10,17 +10,10 @@ const startLocalStack = async () => {
 		.withEnvironment({
 			SERVICES: "sqs,sns",
 			DEBUG: "1",
-			DOCKER_HOST: "unix:///var/run/docker.sock",
 			NODE_TLS_REJECT_UNAUTHORIZED: "0",
 			HOSTNAME: "localhost",
 			AWS_DEFAULT_REGION: "eu-central-1",
 		})
-		.withBindMounts([
-			{
-				source: "/var/run/docker.sock",
-				target: "/var/run/docker.sock",
-			},
-		])
 		.withWaitStrategy(Wait.forListeningPorts())
 		.start();
 	const port = localStack.getMappedPort(4566);
@@ -48,6 +41,9 @@ const bootstrap = async (host, port) => {
 	});
 	await sqs.createQueue({
 		QueueName: "test-queue-hooks",
+	});
+	await sqs.createQueue({
+		QueueName: "test-queue-context",
 	});
 };
 
