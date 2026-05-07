@@ -1,3 +1,15 @@
+# [3.1.0](https://github.com/fgiova/sqs-consumer/compare/3.0.0...3.1.0) (2026-05-07)
+
+
+### Bug Fixes
+
+* prevent unhandled rejections for late handler errors after timeout ([f3e2d05](https://github.com/fgiova/sqs-consumer/commit/f3e2d05707c41b790b8847415a4f4f77cde4f303))
+
+
+### Features
+
+* expose AbortSignal to message handlers via getAbortSignal() ([2aea512](https://github.com/fgiova/sqs-consumer/commit/2aea512582980f14afb939fa3e406128c085c3e9))
+
 # [3.0.0](https://github.com/fgiova/sqs-consumer/compare/2.2.1...3.0.0) (2026-02-12)
 
 ## [2.2.1](https://github.com/fgiova/sqs-consumer/compare/2.2.0...2.2.1) (2025-09-08)
