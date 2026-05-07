@@ -145,10 +145,15 @@ export class SQSConsumer {
 		try {
 			let handlerResult: unknown;
 			if (this.handlerOptions.executionTimeout) {
+				const handlerPromise = handlerContext.run(
+					{ signal: abortController.signal },
+					() => handler(message),
+				);
+				// Swallow late rejection of the loser when timeout wins the race,
+				// otherwise it surfaces as an unhandledRejection.
+				handlerPromise.catch(() => {});
 				handlerResult = await Unpromise.race([
-					handlerContext.run({ signal: abortController.signal }, () =>
-						handler(message),
-					),
+					handlerPromise,
 					new Promise((_resolve, reject) => {
 						timeoutId = setTimeout(() => {
 							const err = new TimeoutError("Handler execution timed out");

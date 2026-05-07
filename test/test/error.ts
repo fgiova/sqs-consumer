@@ -260,6 +260,63 @@ test("sqs-consumer class Errors", { only: true }, async (t) => {
 		await consumer.stop(true);
 		await t.rejects(consumer.start(), "Consumer is destroyed");
 	});
+	await t.test(
+		"No unhandled rejection when handler throws after timeout",
+		async (t) => {
+			const messageToSend = {
+				MessageBody: "Hello World!",
+			};
+			await client.sendMessage(queueARN, messageToSend);
+
+			const unhandled: unknown[] = [];
+			const onUnhandled = (reason: unknown) => {
+				unhandled.push(reason);
+			};
+			process.on("unhandledRejection", onUnhandled);
+
+			const consumer = new SQSConsumer({
+				queueARN,
+				handler: async () => {
+					await setTimeout(800);
+					throw new Error("late-throw-after-timeout");
+				},
+				handlerOptions: {
+					executionTimeout: 200,
+				},
+				clientOptions: {
+					endpoint: process.env.LOCALSTACK_ENDPOINT,
+					signer,
+				},
+				consumerOptions: {
+					waitTimeSeconds: 1,
+				},
+			});
+			const timeoutSeen = new Promise<Message>((resolve) => {
+				consumer.addHook("onHandlerTimeout", async (message: Message) => {
+					// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
+					await client.deleteMessage(queueARN, message.ReceiptHandle!);
+					resolve(message);
+					return true;
+				});
+			});
+
+			t.teardown(async () => {
+				await consumer.stop();
+				process.removeListener("unhandledRejection", onUnhandled);
+			});
+
+			await timeoutSeen;
+			// Wait past the handler's late-throw moment (handler sleeps 800ms,
+			// timeout fires at 200ms — give the late throw time to surface).
+			await setTimeout(1500);
+			t.equal(
+				unhandled.length,
+				0,
+				"late handler rejection must not surface as unhandledRejection",
+			);
+		},
+	);
+
 	await t.test("Not stop a not running consumer", async (t) => {
 		const consumer = new SQSConsumer({
 			queueARN,
