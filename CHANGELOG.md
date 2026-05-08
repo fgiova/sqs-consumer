@@ -1,3 +1,10 @@
+# [3.2.0](https://github.com/fgiova/sqs-consumer/compare/3.1.0...3.2.0) (2026-05-08)
+
+
+### Features
+
+* update dependencies to latest versions in package.json and package-lock.json ([8a7645e](https://github.com/fgiova/sqs-consumer/commit/8a7645ee55292338993e53473604782e298ab2e1))
+
 # [3.1.0](https://github.com/fgiova/sqs-consumer/compare/3.0.0...3.1.0) (2026-05-07)
 
 
