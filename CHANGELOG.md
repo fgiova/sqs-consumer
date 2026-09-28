@@ -1,3 +1,10 @@
+## [3.2.1](https://github.com/fgiova/sqs-consumer/compare/3.2.0...3.2.1) (2026-09-28)
+
+
+### Bug Fixes
+
+* prevent stop() hangs, duplicate poll loops and stale visibility extensions ([eb33966](https://github.com/fgiova/sqs-consumer/commit/eb33966c0ca9cfd6946cf8ae02cc4f211c2d8434))
+
 # [3.2.0](https://github.com/fgiova/sqs-consumer/compare/3.1.0...3.2.0) (2026-05-08)
 
 
