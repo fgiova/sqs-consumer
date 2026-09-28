@@ -347,6 +347,138 @@ test("sqs-consumer class", { only: true }, async (t) => {
 		t.same(await message, messageToSend.MessageBody);
 	});
 
+	await t.test(
+		"visibility extension fires before the timeout expires",
+		async (t) => {
+			const { client } = t.context;
+			await client.sendMessage(queueARN, { MessageBody: "extend" });
+			const sqsClient = new MiniSQSClient(
+				"eu-central-1",
+				process.env.LOCALSTACK_ENDPOINT,
+			);
+			let extendCalls = 0;
+			const originalExtend =
+				sqsClient.changeMessageVisibilityBatch.bind(sqsClient);
+			sqsClient.changeMessageVisibilityBatch = async (arn, receipts, vt) => {
+				extendCalls++;
+				return originalExtend(arn, receipts, vt);
+			};
+			const consumer = new SQSConsumer({
+				queueARN,
+				handler: async () => {
+					await setTimeout(1_500);
+				},
+				autostart: false,
+				consumerOptions: { visibilityTimeout: 2, waitTimeSeconds: 1 },
+				clientOptions: { sqsClient },
+			});
+			let callsDuringHandler = -1;
+			const done = new Promise<void>((resolve) => {
+				consumer.addHook("onHandlerSuccess", (message) => {
+					callsDuringHandler = extendCalls;
+					resolve();
+					return message;
+				});
+			});
+			t.teardown(async () => {
+				await teardownConsumer(consumer);
+				await sqsClient.destroy(false);
+			});
+			await consumer.start();
+			await done;
+			t.ok(callsDuringHandler >= 1);
+		},
+	);
+
+	await t.test(
+		"no visibility extension when visibilityTimeout is 0",
+		async (t) => {
+			const { client } = t.context;
+			await client.sendMessage(queueARN, { MessageBody: "zero" });
+			const sqsClient = new MiniSQSClient(
+				"eu-central-1",
+				process.env.LOCALSTACK_ENDPOINT,
+			);
+			let extendCalls = 0;
+			sqsClient.changeMessageVisibilityBatch = async () => {
+				extendCalls++;
+				return true;
+			};
+			const done = new Promise<void>((resolve) => {
+				sqsClient.deleteMessageBatch = async () => {
+					resolve();
+					return true;
+				};
+			});
+			const consumer = new SQSConsumer({
+				queueARN,
+				handler: async () => {
+					await setTimeout(200);
+				},
+				autostart: false,
+				consumerOptions: { visibilityTimeout: 0, waitTimeSeconds: 1 },
+				clientOptions: { sqsClient },
+			});
+			t.teardown(async () => {
+				await teardownConsumer(consumer);
+				await sqsClient.destroy(false);
+			});
+			await consumer.start();
+			await done;
+			t.equal(extendCalls, 0);
+		},
+	);
+
+	await t.test(
+		"serial visibility extension skips already processed messages",
+		async (t) => {
+			const { client } = t.context;
+			await client.sendMessageBatch(queueARN, [
+				{ Id: "a", MessageBody: "a" },
+				{ Id: "b", MessageBody: "b" },
+			]);
+			const sqsClient = new MiniSQSClient(
+				"eu-central-1",
+				process.env.LOCALSTACK_ENDPOINT,
+			);
+			const deleted = new Set<string>();
+			const staleExtensions: string[] = [];
+			const originalDelete = sqsClient.deleteMessageBatch.bind(sqsClient);
+			const originalExtend =
+				sqsClient.changeMessageVisibilityBatch.bind(sqsClient);
+			sqsClient.changeMessageVisibilityBatch = async (arn, receipts, vt) => {
+				staleExtensions.push(...receipts.filter((r) => deleted.has(r)));
+				return originalExtend(arn, receipts, vt);
+			};
+			let handled = 0;
+			const bothHandled = new Promise<void>((resolve) => {
+				sqsClient.deleteMessageBatch = async (arn, receipts) => {
+					for (const r of receipts) deleted.add(r);
+					const res = await originalDelete(arn, receipts);
+					if (++handled === 2) resolve();
+					return res;
+				};
+			});
+			const consumer = new SQSConsumer({
+				queueARN,
+				handler: async () => {
+					await setTimeout(1_500);
+				},
+				autostart: false,
+				handlerOptions: { parallelExecution: false },
+				consumerOptions: { visibilityTimeout: 1, waitTimeSeconds: 1 },
+				clientOptions: { sqsClient },
+			});
+			t.teardown(async () => {
+				await teardownConsumer(consumer);
+				await sqsClient.destroy(false);
+			});
+			await consumer.start();
+			await bothHandled;
+			t.same(staleExtensions, []);
+		},
+	);
+
 	await t.test("simple get message from queue after empty get", async (t) => {
 		const { client } = t.context;
 

@@ -18,7 +18,7 @@ const startReaper = async () => {
 	const reaperSessionId = reaper.Labels["org.testcontainers.session-id"];
 	return {
 		REAPER: `${reaperIp}:${reaperPort}`,
-		REAPER_SESSION: reaperSessionId,
+		REAPER_SESSION_ID: reaperSessionId,
 	};
 };
 
@@ -26,7 +26,7 @@ const before = async () => {
 	if (!process.env.TEST_LOCAL) {
 		console.log("Start Reaper");
 		const reaperEnv = await startReaper();
-		process.env.REAPER_SESSION_ID = reaperEnv.REAPER_SESSION;
+		process.env.REAPER_SESSION_ID = reaperEnv.REAPER_SESSION_ID;
 		console.log("Start LocalStack");
 		const {
 			// biome-ignore lint/correctness/noUnusedVariables: leave for clarity

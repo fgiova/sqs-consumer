@@ -6,6 +6,9 @@ import { Signer } from "@fgiova/aws-signature";
 import { type Message, MiniSQSClient } from "@fgiova/mini-sqs-client";
 import { before, teardown, test } from "tap";
 import { SQSConsumer } from "../../src/index";
+// biome-ignore lint/suspicious/noTsIgnore: is a Test file
+// @ts-ignore
+import { sqsPurge } from "../helpers/sqsMessage";
 
 const queueARN = "arn:aws:sqs:eu-central-1:000000000000:test-queue-errors";
 let signer: Signer;
@@ -316,6 +319,67 @@ test("sqs-consumer class Errors", { only: true }, async (t) => {
 			);
 		},
 	);
+
+	await t.test(
+		"stop resolves when serial deleteMessageBatch fails mid-batch",
+		async (t) => {
+			await client.sendMessageBatch(queueARN, [
+				{ Id: "a", MessageBody: "a" },
+				{ Id: "b", MessageBody: "b" },
+				{ Id: "c", MessageBody: "c" },
+			]);
+			const sqsClient = new MiniSQSClient(
+				"eu-central-1",
+				process.env.LOCALSTACK_ENDPOINT,
+				undefined,
+				signer,
+			);
+			sqsClient.deleteMessageBatch = async () => {
+				throw new Error("delete-failure");
+			};
+			const consumer = new SQSConsumer({
+				queueARN,
+				autostart: false,
+				handler: async () => ({ success: true }),
+				handlerOptions: { parallelExecution: false },
+				clientOptions: { sqsClient },
+				consumerOptions: { waitTimeSeconds: 1 },
+			});
+			const sqsError = new Promise<void>((resolve) => {
+				consumer.addHook("onSQSError", () => resolve());
+			});
+			t.teardown(async () => {
+				await sqsPurge(queueARN);
+			});
+			await consumer.start();
+			await sqsError;
+			const outcome = await Promise.race([
+				consumer.stop().then(() => "stopped"),
+				setTimeout(5_000, "hang"),
+			]);
+			t.equal(outcome, "stopped");
+		},
+	);
+
+	await t.test("start during pending stop is rejected", async (t) => {
+		const consumer = new SQSConsumer({
+			queueARN,
+			autostart: false,
+			handler: async () => ({ success: true }),
+			clientOptions: {
+				endpoint: process.env.LOCALSTACK_ENDPOINT,
+				signer,
+			},
+			consumerOptions: { waitTimeSeconds: 1 },
+		});
+		await consumer.start();
+		const stopping = consumer.stop();
+		await t.rejects(consumer.start(), { message: "Consumer is stopping" });
+		await stopping;
+		await consumer.start();
+		t.equal(consumer.isRunning, true);
+		await consumer.stop();
+	});
 
 	await t.test("Not stop a not running consumer", async (t) => {
 		const consumer = new SQSConsumer({
