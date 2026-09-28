@@ -31,7 +31,7 @@ const defaultExport = () => {
 		const socket = new Socket();
 		socket.connect(Number(port), host, () => {
 			socket.write(
-				`label=org.testcontainers.session-id=${process.env.REAPER_SESSION}\r\n`,
+				`label=org.testcontainers.session-id=${process.env.REAPER_SESSION_ID}\r\n`,
 			);
 		});
 		socket.on("error", (error) => {

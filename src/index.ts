@@ -61,9 +61,8 @@ export class SQSConsumer {
 	private readonly sqsClient: MiniSQSClient;
 	private readonly hooks: Hooks;
 	private readonly messageHandler: (message: Message) => Promise<unknown>;
-	private messagesOnFly: number = 0;
 	private running: boolean = false;
-	private polling: boolean = false;
+	private pollLoop: Promise<void> | null = null;
 	private destroyed: boolean = false;
 	private readonly logger: Logger;
 
@@ -159,7 +158,7 @@ export class SQSConsumer {
 							const err = new TimeoutError("Handler execution timed out");
 							abortController.abort(err);
 							reject(err);
-						}, this.handlerOptions.executionTimeout);
+						}, this.handlerOptions.executionTimeout).unref();
 					}),
 				]);
 			} else {
@@ -183,28 +182,24 @@ export class SQSConsumer {
 	}
 
 	private haExtendVisibilityTimeout(
-		messages: Message[],
+		pendingReceipts: Set<string>,
 		visibilityTimeout: number,
 	) {
-		if (this.handlerOptions.extendVisibilityTimeout !== false) {
-			const processingMessages = messages.map(
-				// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
-				(message) => message.ReceiptHandle!,
-			);
-			return setInterval(
-				async () => {
-					try {
-						await this.sqsClient.changeMessageVisibilityBatch(
-							this.queueARN,
-							processingMessages,
-							visibilityTimeout,
-						);
-					} /* c8 ignore next 3 */ catch (e) {
-						await this.hooks.runHook("onSQSError", e as Error);
-					}
-				},
-				visibilityTimeout * 1000 - 5,
-			);
+		if (
+			this.handlerOptions.extendVisibilityTimeout !== false &&
+			visibilityTimeout > 0
+		) {
+			return setInterval(async () => {
+				try {
+					await this.sqsClient.changeMessageVisibilityBatch(
+						this.queueARN,
+						[...pendingReceipts],
+						visibilityTimeout,
+					);
+				} /* c8 ignore next 3 */ catch (e) {
+					await this.hooks.runHook("onSQSError", e as Error);
+				}
+			}, visibilityTimeout * 500);
 		}
 		return null;
 	}
@@ -242,7 +237,6 @@ export class SQSConsumer {
 		let consecutiveErrors = 0;
 		while (this.running) {
 			try {
-				this.polling = true;
 				/* c8 ignore next 1 */
 				const visibilityTimeout = this.consumerOptions.visibilityTimeout ?? 30;
 				const messagesResult = await this.sqsClient.receiveMessage(
@@ -260,40 +254,34 @@ export class SQSConsumer {
 					/* c8 ignore next 1 */
 					messagesResult.Messages ?? [],
 				);
-				this.messagesOnFly += messages.length;
 				if (messages.length) {
+					const pendingReceipts = new Set(
+						// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
+						messages.map((message) => message.ReceiptHandle!),
+					);
 					const haTimeout = this.haExtendVisibilityTimeout(
-						messages,
+						pendingReceipts,
 						visibilityTimeout,
 					);
 					try {
 						if (this.handlerOptions.parallelExecution !== false) {
-							try {
-								const results = await pMap(
-									messages,
-									async (message) => {
-										return await this.runOnMessageHook(message);
-									},
-									{
-										concurrency: 10,
-										stopOnError: false,
-									},
-								);
-								await this.deleteMessages(results);
-							} finally {
-								this.messagesOnFly -= messages.length;
-							}
+							const results = await pMap(
+								messages,
+								async (message) => {
+									return await this.runOnMessageHook(message);
+								},
+								{
+									concurrency: 10,
+									stopOnError: false,
+								},
+							);
+							await this.deleteMessages(results);
 						} else {
-							const handlingMessages = [...messages];
-							for (let i = 0; i < handlingMessages.length; i++) {
-								try {
-									const result = await this.runOnMessageHook(
-										handlingMessages[i],
-									);
-									await this.deleteMessages([result]);
-								} finally {
-									this.messagesOnFly -= 1;
-								}
+							for (const message of messages) {
+								const result = await this.runOnMessageHook(message);
+								// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
+								pendingReceipts.delete(message.ReceiptHandle!);
+								await this.deleteMessages([result]);
 							}
 						}
 					} finally {
@@ -307,16 +295,18 @@ export class SQSConsumer {
 					Math.min(1000 * 2 ** consecutiveErrors++, 30_000),
 				);
 			}
-			this.polling = false;
 		}
 	}
 
 	public async start() {
 		try {
 			if (this.running) throw new Error("Consumer is already running");
+			if (this.pollLoop) throw new Error("Consumer is stopping");
 			if (this.destroyed) throw new Error("Consumer is destroyed");
 			this.running = true;
-			void this.pollMessages();
+			this.pollLoop = this.pollMessages().finally(() => {
+				this.pollLoop = null;
+			});
 		} finally {
 			await this.hooks.runHook("onStart", this);
 		}
@@ -326,9 +316,7 @@ export class SQSConsumer {
 		try {
 			if (!this.running) throw new Error("Consumer is not running");
 			this.running = false;
-			while (this.messagesOnFly > 0 || this.polling) {
-				await setTimeoutAsync(500);
-			}
+			await this.pollLoop;
 			if (destroy) {
 				await this.sqsClient.destroy(this.clientOptions.destroySigner);
 				this.destroyed = true;
