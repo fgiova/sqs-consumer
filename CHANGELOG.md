@@ -1,3 +1,10 @@
+# [3.3.0](https://github.com/fgiova/sqs-consumer/compare/3.2.1...3.3.0) (2026-10-23)
+
+
+### Features
+
+* add configurable delay for failed message redelivery ([a8eba51](https://github.com/fgiova/sqs-consumer/commit/a8eba51bd46ce0f11d23c5af613675d8594feb37))
+
 ## [3.2.1](https://github.com/fgiova/sqs-consumer/compare/3.2.0...3.2.1) (2026-09-28)
 
 
