@@ -34,6 +34,8 @@ type ConsumerOptions = {
 	itemsPerRequest?: number;
 	messageAttributeNames?: string[];
 	attributeNames?: string[];
+	errorDelaySeconds?: number;
+	errorDelayBackoff?: (attempt: number) => number;
 };
 
 type ConsumerHookName = Exclude<HookName, "onStart" | "onStop">;
@@ -55,9 +57,13 @@ export type SQSConsumerOptions = {
 
 export class SQSConsumer {
 	private readonly queueARN: string;
-	private readonly handlerOptions: HandlerOptions;
+	private readonly handlerOptions: Required<HandlerOptions>;
 	private readonly clientOptions: Pick<ClientOptions, "destroySigner">;
-	private readonly consumerOptions: ConsumerOptions;
+	private readonly consumerOptions: Required<
+		Omit<ConsumerOptions, "errorDelayBackoff">
+	> & {
+		errorDelayBackoff?: (attempt: number) => number;
+	};
 	private readonly sqsClient: MiniSQSClient;
 	private readonly hooks: Hooks;
 	private readonly messageHandler: (message: Message) => Promise<unknown>;
@@ -90,7 +96,16 @@ export class SQSConsumer {
 			itemsPerRequest: options.consumerOptions?.itemsPerRequest ?? 10,
 			messageAttributeNames:
 				options.consumerOptions?.messageAttributeNames ?? [],
-			attributeNames: options.consumerOptions?.attributeNames ?? [],
+			attributeNames: [
+				...new Set([
+					...(options.consumerOptions?.attributeNames ?? []),
+					...(options.consumerOptions?.errorDelayBackoff
+						? ["ApproximateReceiveCount"]
+						: []),
+				]),
+			],
+			errorDelaySeconds: options.consumerOptions?.errorDelaySeconds ?? 0,
+			errorDelayBackoff: options.consumerOptions?.errorDelayBackoff,
 		};
 		this.sqsClient =
 			options.clientOptions?.sqsClient ??
@@ -185,11 +200,10 @@ export class SQSConsumer {
 		pendingReceipts: Set<string>,
 		visibilityTimeout: number,
 	) {
-		if (
-			this.handlerOptions.extendVisibilityTimeout !== false &&
-			visibilityTimeout > 0
-		) {
+		if (this.handlerOptions.extendVisibilityTimeout && visibilityTimeout > 0) {
 			return setInterval(async () => {
+				/* c8 ignore next 1 */
+				if (!pendingReceipts.size) return;
 				try {
 					await this.sqsClient.changeMessageVisibilityBatch(
 						this.queueARN,
@@ -208,12 +222,33 @@ export class SQSConsumer {
 		messagesResults: Awaited<ReturnType<typeof this.runOnMessageHook>>[],
 	) {
 		const candidatesToDelete: string[] = [];
-		const candidateToRelease: string[] = [];
+		const candidateToRelease: {
+			receiptHandle: string;
+			visibilityTimeout: number;
+		}[] = [];
 		for (const result of messagesResults) {
 			if (result.error) {
-				// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
-				candidateToRelease.push(result.message.ReceiptHandle!);
-			} else if (this.handlerOptions.deleteMessage !== false) {
+				let delaySeconds = this.consumerOptions.errorDelaySeconds;
+				if (this.consumerOptions.errorDelayBackoff) {
+					try {
+						delaySeconds = this.consumerOptions.errorDelayBackoff(
+							/* c8 ignore next 1 */
+							Number(result.message.Attributes?.ApproximateReceiveCount ?? 0),
+						);
+					} catch (e) {
+						await this.hooks.runHook("onSQSError", e as Error);
+					}
+				}
+
+				candidateToRelease.push({
+					// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
+					receiptHandle: result.message.ReceiptHandle!,
+					visibilityTimeout: Math.min(
+						43_200,
+						Math.max(0, Math.trunc(delaySeconds) || 0),
+					),
+				});
+			} else if (this.handlerOptions.deleteMessage) {
 				// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
 				candidatesToDelete.push(result.message.ReceiptHandle!);
 			}
@@ -228,7 +263,6 @@ export class SQSConsumer {
 			await this.sqsClient.changeMessageVisibilityBatch(
 				this.queueARN,
 				candidateToRelease,
-				0,
 			);
 		}
 	}
@@ -237,8 +271,7 @@ export class SQSConsumer {
 		let consecutiveErrors = 0;
 		while (this.running) {
 			try {
-				/* c8 ignore next 1 */
-				const visibilityTimeout = this.consumerOptions.visibilityTimeout ?? 30;
+				const visibilityTimeout = this.consumerOptions.visibilityTimeout;
 				const messagesResult = await this.sqsClient.receiveMessage(
 					this.queueARN,
 					{
@@ -264,7 +297,7 @@ export class SQSConsumer {
 						visibilityTimeout,
 					);
 					try {
-						if (this.handlerOptions.parallelExecution !== false) {
+						if (this.handlerOptions.parallelExecution) {
 							const results = await pMap(
 								messages,
 								async (message) => {
@@ -275,6 +308,7 @@ export class SQSConsumer {
 									stopOnError: false,
 								},
 							);
+							pendingReceipts.clear();
 							await this.deleteMessages(results);
 						} else {
 							for (const message of messages) {

@@ -78,13 +78,32 @@ const consumer = new SQSConsumer({
 | destroySigner    | boolean                | true    | Whether to destroy the signer when the consumer is destroyed.                                             |
 
 ### ConsumerOptions
-| Option                | Type     | Default | Description                                                |
-|-----------------------|----------|---------|------------------------------------------------------------|
-| visibilityTimeout     | number   | 30      | The visibility timeout for the messages in seconds         |
-| waitTimeSeconds       | number   | 20      | The wait time for the receiveMessage call in seconds       |
-| itemsPerRequest       | number   | 10      | The maximum number of messages to be received at once      |
-| messageAttributeNames | string[] | []      | The message attribute names to be included in the response |
-| attributeNames        | string[] | []      | The attribute names to be included in the response         |
+| Option                | Type                        | Default | Description                                                                                                                                  |
+|-----------------------|-----------------------------|---------|----------------------------------------------------------------------------------------------------------------------------------------------|
+| visibilityTimeout     | number                      | 30      | The visibility timeout for the messages in seconds                                                                                           |
+| waitTimeSeconds       | number                      | 20      | The wait time for the receiveMessage call in seconds                                                                                         |
+| itemsPerRequest       | number                      | 10      | The maximum number of messages to be received at once                                                                                        |
+| messageAttributeNames | string[]                    | []      | The message attribute names to be included in the response                                                                                   |
+| attributeNames        | string[]                    | []      | The attribute names to be included in the response                                                                                           |
+| errorDelaySeconds     | number                      | 0       | Seconds a failed message stays invisible before it can be received again                                                                     |
+| errorDelayBackoff     | (attempt: number) => number |         | Returns the delay in seconds for a failed message, given its `ApproximateReceiveCount`. Takes precedence over `errorDelaySeconds` |
+
+Delays are truncated to an integer and clamped to the SQS range 0–43200 seconds. When `errorDelayBackoff` is set, `ApproximateReceiveCount` is added to `attributeNames` automatically. If `errorDelayBackoff` throws, the error is reported to `onSQSError` and `errorDelaySeconds` is used instead.
+
+> **Note:** SQS counts the 12-hour visibility limit from when the message was received, not from when the delay is set. A delay that exceeds the remaining time (roughly `43200 - executionTimeout - visibility extensions`) is silently rejected by SQS and the message is retried after its current visibility timeout. Keep delays well below 12 hours, and keep their sum below the queue's `MessageRetentionPeriod`, or the message expires without reaching the DLQ.
+>
+> Every retry increments `ApproximateReceiveCount`, so with a redrive policy the message moves to the DLQ after `maxReceiveCount` attempts: size the backoff accordingly. On FIFO queues a delayed message blocks its whole message group until the delay expires.
+
+```typescript
+const consumer = new SQSConsumer({
+	queueARN: "arn:aws:sqs:eu-central-1:000000000000:test",
+	handler: async (message) => { /* ... */ },
+	consumerOptions: {
+		// 1st failure: 2s, 2nd: 4s, 3rd: 8s ... capped at 15 minutes
+		errorDelayBackoff: (attempt) => Math.min(2 ** attempt, 900),
+	},
+});
+```
 
 ### Hooks
 | Option           | Type                                                                  | Description                                                         |
