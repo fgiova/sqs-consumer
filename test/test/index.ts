@@ -623,4 +623,122 @@ test("sqs-consumer class", { only: true }, async (t) => {
 			t.same((await errorMessage).Body, messageToSend.MessageBody);
 		},
 	);
+
+	await t.test(
+		"errorDelayBackoff receives ApproximateReceiveCount and delays redelivery",
+		async (t) => {
+			const { client } = t.context;
+			await client.sendMessage(queueARN, { MessageBody: "backoff" });
+
+			const attempts: number[] = [];
+			const receivedAt: number[] = [];
+			let done: () => void;
+			const completed = new Promise<void>((resolve) => {
+				done = resolve;
+			});
+
+			const consumer = new SQSConsumer({
+				queueARN,
+				handler: async () => {
+					receivedAt.push(Date.now());
+					if (receivedAt.length === 1) throw new Error("first attempt fails");
+					done();
+				},
+				consumerOptions: {
+					waitTimeSeconds: 1,
+					errorDelayBackoff: (attempt) => {
+						attempts.push(attempt);
+						return attempt * 2;
+					},
+				},
+				clientOptions: {
+					endpoint: process.env.LOCALSTACK_ENDPOINT,
+				},
+			});
+			t.teardown(async () => {
+				await teardownConsumer(consumer);
+			});
+
+			await completed;
+			t.same(attempts, [1]);
+			t.ok(receivedAt[1] - receivedAt[0] >= 1_500);
+		},
+	);
+
+	await t.test(
+		"errorDelayBackoff throwing falls back to errorDelaySeconds",
+		async (t) => {
+			const { client } = t.context;
+			await client.sendMessage(queueARN, { MessageBody: "backoff-throws" });
+
+			let calls = 0;
+			let done: () => void;
+			const completed = new Promise<void>((resolve) => {
+				done = resolve;
+			});
+
+			const consumer = new SQSConsumer({
+				queueARN,
+				handler: async () => {
+					if (++calls === 1) throw new Error("first attempt fails");
+					done();
+				},
+				consumerOptions: {
+					waitTimeSeconds: 1,
+					errorDelayBackoff: () => {
+						throw new Error("backoff-error");
+					},
+				},
+				clientOptions: {
+					endpoint: process.env.LOCALSTACK_ENDPOINT,
+				},
+			});
+			const sqsError = new Promise<Error>((resolve) => {
+				consumer.addHook("onSQSError", async (error: Error) => {
+					resolve(error);
+				});
+			});
+			t.teardown(async () => {
+				await teardownConsumer(consumer);
+			});
+
+			t.equal((await sqsError).message, "backoff-error");
+			await completed;
+			t.equal(calls, 2);
+		},
+	);
+
+	await t.test("errorDelaySeconds delays redelivery", async (t) => {
+		const { client } = t.context;
+		await client.sendMessage(queueARN, { MessageBody: "fixed-delay" });
+
+		const receivedAt: number[] = [];
+		let done: () => void;
+		const completed = new Promise<void>((resolve) => {
+			done = resolve;
+		});
+
+		const consumer = new SQSConsumer({
+			queueARN,
+			handler: async (message: Message) => {
+				receivedAt.push(Date.now());
+				if (receivedAt.length === 1) throw new Error("first attempt fails");
+				t.notOk(message.Attributes?.ApproximateReceiveCount);
+				done();
+			},
+			consumerOptions: {
+				waitTimeSeconds: 1,
+				errorDelaySeconds: 2,
+			},
+			clientOptions: {
+				endpoint: process.env.LOCALSTACK_ENDPOINT,
+			},
+		});
+		t.teardown(async () => {
+			await teardownConsumer(consumer);
+		});
+
+		await completed;
+		t.ok(receivedAt[1] - receivedAt[0] >= 1_500);
+	});
 });
