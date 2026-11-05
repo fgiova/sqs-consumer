@@ -87,6 +87,7 @@ const consumer = new SQSConsumer({
 | attributeNames        | string[]                    | []      | The attribute names to be included in the response                                                                                           |
 | errorDelaySeconds     | number                      | 0       | Seconds a failed message stays invisible before it can be received again                                                                     |
 | errorDelayBackoff     | (attempt: number) => number |         | Returns the delay in seconds for a failed message, given its `ApproximateReceiveCount`. Takes precedence over `errorDelaySeconds` |
+| maxReceiveCount       | number / (attempt: number) => number |  | Receive count after which a failed message triggers `onMaxReceiveCountExceeded`. A function receives the `ApproximateReceiveCount` and returns the threshold |
 
 Delays are truncated to an integer and clamped to the SQS range 0–43200 seconds. When `errorDelayBackoff` is set, `ApproximateReceiveCount` is added to `attributeNames` automatically. If `errorDelayBackoff` throws, the error is reported to `onSQSError` and `errorDelaySeconds` is used instead.
 
@@ -105,6 +106,23 @@ const consumer = new SQSConsumer({
 });
 ```
 
+When a message fails and its `ApproximateReceiveCount` reaches `maxReceiveCount`, the `onMaxReceiveCountExceeded` hook is called with the message and its receive count. **The message is deleted unless a hook returns `false`**, including when no hook is registered: return `false` to release it with the usual error delay instead. When `maxReceiveCount` is set, `ApproximateReceiveCount` is added to `attributeNames` automatically. If the `maxReceiveCount` function throws, the error is reported to `onSQSError` and the message is released.
+
+> **Note:** if the queue has a redrive policy, set `maxReceiveCount` below the queue's own `maxReceiveCount`, or SQS moves the message to the DLQ before the hook is called.
+
+```typescript
+const consumer = new SQSConsumer({
+	queueARN: "arn:aws:sqs:eu-central-1:000000000000:test",
+	handler: async (message) => { /* ... */ },
+	consumerOptions: {
+		maxReceiveCount: 5,
+	},
+});
+consumer.addHook("onMaxReceiveCountExceeded", async (message, count) => {
+	await archive(message); // keep a copy, then let the consumer delete it
+});
+```
+
 ### Hooks
 | Option           | Type                                                                  | Description                                                         |
 |------------------|-----------------------------------------------------------------------|---------------------------------------------------------------------|
@@ -113,6 +131,7 @@ const consumer = new SQSConsumer({
 | onHandlerSuccess | (message: Message) => Promise<Message>                                | Called when the consumer handles a message successfully             |
 | onHandlerTimeout | (message: Message) => Promise<boolean>                                | Called when the consumer handler execution exceed executionTimeout  |
 | onHandlerError   | (message: Message, error: Error) => Promise<boolean>                  | Called when the consumer handler execution throws an error          |
+| onMaxReceiveCountExceeded | (message: Message, count: number) => Promise<boolean> | Called when a failed message reaches `maxReceiveCount`. Return `false` to keep the message, otherwise it is deleted |
 | onSuccess        | (message: Message) => Promise<boolean>                                | Called when the consumer handler execution finishes successfully    |
 | onError          | (hook: HookName, message: Message, error: Error) => Promise<boolean>  | Called when the consumer handler execution throws an uncaught error |
 | onSQSError       | (error: Error, message?: Message) => Promise<void>                    | Called when the consumer receives an error from the SQS service     |

@@ -10,6 +10,7 @@ export type HookName =
 	| "onHandlerSuccess"
 	| "onHandlerTimeout"
 	| "onHandlerError"
+	| "onMaxReceiveCountExceeded"
 	| "onSuccess"
 	| "onError"
 	| "onSQSError";
@@ -22,6 +23,10 @@ export type HookSignatureMap = {
 	onHandlerSuccess: { args: [message: Message]; return: Message };
 	onHandlerTimeout: { args: [message: Message]; return: boolean };
 	onHandlerError: { args: [message: Message, error: Error]; return: boolean };
+	onMaxReceiveCountExceeded: {
+		args: [message: Message, count: number];
+		return: boolean;
+	};
 	onSuccess: { args: [message: Message]; return: boolean };
 	onError: {
 		args: [hook: HookName, message: Message, error: Error];
@@ -82,6 +87,11 @@ export class Hooks {
 			throwable: false,
 			type: "boolean-return",
 		},
+		onMaxReceiveCountExceeded: {
+			S: Symbol("maxReceiveCountExceeded"),
+			throwable: false,
+			type: "boolean-return",
+		},
 		onSuccess: {
 			S: Symbol("success"),
 			throwable: false,
@@ -112,6 +122,7 @@ export class Hooks {
 			[this.hookSymbols.onHandlerSuccess.S]: [],
 			[this.hookSymbols.onHandlerTimeout.S]: [],
 			[this.hookSymbols.onHandlerError.S]: [],
+			[this.hookSymbols.onMaxReceiveCountExceeded.S]: [],
 			[this.hookSymbols.onSuccess.S]: [],
 			[this.hookSymbols.onError.S]: [],
 			[this.hookSymbols.onSQSError.S]: [],
