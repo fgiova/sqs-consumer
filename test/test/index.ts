@@ -741,4 +741,138 @@ test("sqs-consumer class", { only: true }, async (t) => {
 		await completed;
 		t.ok(receivedAt[1] - receivedAt[0] >= 1_500);
 	});
+	await t.test(
+		"maxReceiveCount number deletes the message when the hook does not return false",
+		async (t) => {
+			const { client } = t.context;
+			await client.sendMessage(queueARN, { MessageBody: "max-receive-delete" });
+
+			let calls = 0;
+			const consumer = new SQSConsumer({
+				queueARN,
+				handler: async () => {
+					calls++;
+					throw new Error("always fails");
+				},
+				consumerOptions: {
+					waitTimeSeconds: 1,
+					maxReceiveCount: 2,
+				},
+				clientOptions: {
+					endpoint: process.env.LOCALSTACK_ENDPOINT,
+				},
+			});
+			const exceeded = new Promise<[Message, number]>((resolve) => {
+				consumer.addHook(
+					"onMaxReceiveCountExceeded",
+					async (message: Message, count: number) => {
+						resolve([message, count]);
+					},
+				);
+			});
+
+			const [message, count] = await exceeded;
+			await consumer.stop();
+			t.equal(message.Body, "max-receive-delete");
+			t.equal(count, 2);
+			t.equal(calls, 2);
+			const left = await client.receiveMessage(queueARN, {
+				WaitTimeSeconds: 1,
+			});
+			t.notOk(left.Messages?.length);
+			await sqsPurge(queueARN);
+		},
+	);
+
+	await t.test(
+		"maxReceiveCount function keeps the message when the hook returns false",
+		async (t) => {
+			const { client } = t.context;
+			await client.sendMessage(queueARN, { MessageBody: "max-receive-keep" });
+
+			const attempts: number[] = [];
+			const exceededCounts: number[] = [];
+			let calls = 0;
+			let done: () => void;
+			const completed = new Promise<void>((resolve) => {
+				done = resolve;
+			});
+
+			const consumer = new SQSConsumer({
+				queueARN,
+				handler: async () => {
+					if (++calls < 3) throw new Error("fails twice");
+					done();
+				},
+				consumerOptions: {
+					waitTimeSeconds: 1,
+					maxReceiveCount: (attempt) => {
+						attempts.push(attempt);
+						return 2;
+					},
+				},
+				clientOptions: {
+					endpoint: process.env.LOCALSTACK_ENDPOINT,
+				},
+			});
+			consumer.addHook(
+				"onMaxReceiveCountExceeded",
+				async (_message: Message, count: number) => {
+					exceededCounts.push(count);
+					return false;
+				},
+			);
+			t.teardown(async () => {
+				await teardownConsumer(consumer);
+			});
+
+			await completed;
+			t.same(attempts, [1, 2]);
+			t.same(exceededCounts, [2]);
+			t.equal(calls, 3);
+		},
+	);
+
+	await t.test(
+		"maxReceiveCount throwing reports onSQSError and releases the message",
+		async (t) => {
+			const { client } = t.context;
+			await client.sendMessage(queueARN, { MessageBody: "max-receive-throws" });
+
+			let calls = 0;
+			let done: () => void;
+			const completed = new Promise<void>((resolve) => {
+				done = resolve;
+			});
+
+			const consumer = new SQSConsumer({
+				queueARN,
+				handler: async () => {
+					if (++calls === 1) throw new Error("first attempt fails");
+					done();
+				},
+				consumerOptions: {
+					waitTimeSeconds: 1,
+					maxReceiveCount: () => {
+						throw new Error("max-receive-error");
+					},
+				},
+				clientOptions: {
+					endpoint: process.env.LOCALSTACK_ENDPOINT,
+				},
+			});
+			const sqsError = new Promise<Error>((resolve) => {
+				consumer.addHook("onSQSError", async (error: Error) => {
+					resolve(error);
+				});
+			});
+			t.teardown(async () => {
+				await teardownConsumer(consumer);
+			});
+
+			t.equal((await sqsError).message, "max-receive-error");
+			await completed;
+			t.equal(calls, 2);
+		},
+	);
 });

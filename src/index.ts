@@ -36,6 +36,7 @@ type ConsumerOptions = {
 	attributeNames?: string[];
 	errorDelaySeconds?: number;
 	errorDelayBackoff?: (attempt: number) => number;
+	maxReceiveCount?: number | ((attempt: number) => number);
 };
 
 type ConsumerHookName = Exclude<HookName, "onStart" | "onStop">;
@@ -60,9 +61,10 @@ export class SQSConsumer {
 	private readonly handlerOptions: Required<HandlerOptions>;
 	private readonly clientOptions: Pick<ClientOptions, "destroySigner">;
 	private readonly consumerOptions: Required<
-		Omit<ConsumerOptions, "errorDelayBackoff">
+		Omit<ConsumerOptions, "errorDelayBackoff" | "maxReceiveCount">
 	> & {
 		errorDelayBackoff?: (attempt: number) => number;
+		maxReceiveCount?: number | ((attempt: number) => number);
 	};
 	private readonly sqsClient: MiniSQSClient;
 	private readonly hooks: Hooks;
@@ -99,13 +101,15 @@ export class SQSConsumer {
 			attributeNames: [
 				...new Set([
 					...(options.consumerOptions?.attributeNames ?? []),
-					...(options.consumerOptions?.errorDelayBackoff
+					...(options.consumerOptions?.errorDelayBackoff ||
+					options.consumerOptions?.maxReceiveCount !== undefined
 						? ["ApproximateReceiveCount"]
 						: []),
 				]),
 			],
 			errorDelaySeconds: options.consumerOptions?.errorDelaySeconds ?? 0,
 			errorDelayBackoff: options.consumerOptions?.errorDelayBackoff,
+			maxReceiveCount: options.consumerOptions?.maxReceiveCount,
 		};
 		this.sqsClient =
 			options.clientOptions?.sqsClient ??
@@ -229,6 +233,34 @@ export class SQSConsumer {
 		for (const result of messagesResults) {
 			if (result.error) {
 				let delaySeconds = this.consumerOptions.errorDelaySeconds;
+				const maxReceiveCount = this.consumerOptions.maxReceiveCount;
+				if (maxReceiveCount !== undefined) {
+					try {
+						const receiveCount = Number(
+							/* c8 ignore next 1 */
+							result.message.Attributes?.ApproximateReceiveCount ?? 0,
+						);
+						if (
+							receiveCount >=
+							(typeof maxReceiveCount === "function"
+								? maxReceiveCount(receiveCount)
+								: maxReceiveCount)
+						) {
+							const toDelete = await this.hooks.runHook(
+								"onMaxReceiveCountExceeded",
+								result.message,
+								receiveCount,
+							);
+							if (toDelete) {
+								// biome-ignore lint/style/noNonNullAssertion: ReceiptHandle must be present here
+								candidatesToDelete.push(result.message.ReceiptHandle!);
+								continue;
+							}
+						}
+					} catch (e) {
+						await this.hooks.runHook("onSQSError", e as Error);
+					}
+				}
 				if (this.consumerOptions.errorDelayBackoff) {
 					try {
 						delaySeconds = this.consumerOptions.errorDelayBackoff(
