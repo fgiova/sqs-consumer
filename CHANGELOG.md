@@ -1,3 +1,10 @@
+# [3.4.0](https://github.com/fgiova/sqs-consumer/compare/3.3.0...3.4.0) (2026-11-05)
+
+
+### Features
+
+* add maxReceiveCount option and onMaxReceiveCountExceeded hook ([3554650](https://github.com/fgiova/sqs-consumer/commit/3554650b1b8d88a26b72173fd15b5f0bfdd6de31))
+
 # [3.3.0](https://github.com/fgiova/sqs-consumer/compare/3.2.1...3.3.0) (2026-10-23)
 
 
