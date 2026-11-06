@@ -1,3 +1,10 @@
+# [3.5.0](https://github.com/fgiova/sqs-consumer/compare/3.4.0...3.5.0) (2026-11-06)
+
+
+### Features
+
+* pass the message to errorDelayBackoff and maxReceiveCount ([ddccc03](https://github.com/fgiova/sqs-consumer/commit/ddccc03b26a78b4b805b98a6855f54e069cd3b84))
+
 # [3.4.0](https://github.com/fgiova/sqs-consumer/compare/3.3.0...3.4.0) (2026-11-05)
 
 
