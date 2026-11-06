@@ -86,10 +86,10 @@ const consumer = new SQSConsumer({
 | messageAttributeNames | string[]                    | []      | The message attribute names to be included in the response                                                                                   |
 | attributeNames        | string[]                    | []      | The attribute names to be included in the response                                                                                           |
 | errorDelaySeconds     | number                      | 0       | Seconds a failed message stays invisible before it can be received again                                                                     |
-| errorDelayBackoff     | (attempt: number) => number |         | Returns the delay in seconds for a failed message, given its `ApproximateReceiveCount`. Takes precedence over `errorDelaySeconds` |
-| maxReceiveCount       | number / (attempt: number) => number |  | Receive count after which a failed message triggers `onMaxReceiveCountExceeded`. A function receives the `ApproximateReceiveCount` and returns the threshold |
+| errorDelayBackoff     | (attempt: number, message: Message) => number |  | Returns the delay in seconds for a failed message, given its `ApproximateReceiveCount` and the message itself. Takes precedence over `errorDelaySeconds` |
+| maxReceiveCount       | number / (attempt: number, message: Message) => number |  | Receive count after which a failed message triggers `onMaxReceiveCountExceeded`. A function receives the `ApproximateReceiveCount` and the message, and returns the threshold |
 
-Delays are truncated to an integer and clamped to the SQS range 0–43200 seconds. When `errorDelayBackoff` is set, `ApproximateReceiveCount` is added to `attributeNames` automatically. If `errorDelayBackoff` throws, the error is reported to `onSQSError` and `errorDelaySeconds` is used instead.
+Delays are truncated to an integer and clamped to the SQS range 0–43200 seconds. When `errorDelayBackoff` is set, `ApproximateReceiveCount` is added to `attributeNames` automatically. If `errorDelayBackoff` throws, the error is reported to `onSQSError` together with the message and `errorDelaySeconds` is used instead.
 
 > **Note:** SQS counts the 12-hour visibility limit from when the message was received, not from when the delay is set. A delay that exceeds the remaining time (roughly `43200 - executionTimeout - visibility extensions`) is silently rejected by SQS and the message is retried after its current visibility timeout. Keep delays well below 12 hours, and keep their sum below the queue's `MessageRetentionPeriod`, or the message expires without reaching the DLQ.
 >
@@ -106,7 +106,7 @@ const consumer = new SQSConsumer({
 });
 ```
 
-When a message fails and its `ApproximateReceiveCount` reaches `maxReceiveCount`, the `onMaxReceiveCountExceeded` hook is called with the message and its receive count. **The message is deleted unless a hook returns `false`**, including when no hook is registered: return `false` to release it with the usual error delay instead. When `maxReceiveCount` is set, `ApproximateReceiveCount` is added to `attributeNames` automatically. If the `maxReceiveCount` function throws, the error is reported to `onSQSError` and the message is released.
+When a message fails and its `ApproximateReceiveCount` reaches `maxReceiveCount`, the `onMaxReceiveCountExceeded` hook is called with the message and its receive count. **The message is deleted unless a hook returns `false`**, including when no hook is registered: return `false` to release it with the usual error delay instead. When `maxReceiveCount` is set, `ApproximateReceiveCount` is added to `attributeNames` automatically. If the `maxReceiveCount` function throws, the error is reported to `onSQSError` together with the message and the message is released.
 
 > **Note:** if the queue has a redrive policy, set `maxReceiveCount` below the queue's own `maxReceiveCount`, or SQS moves the message to the DLQ before the hook is called.
 

@@ -646,7 +646,8 @@ test("sqs-consumer class", { only: true }, async (t) => {
 				},
 				consumerOptions: {
 					waitTimeSeconds: 1,
-					errorDelayBackoff: (attempt) => {
+					errorDelayBackoff: (attempt, message) => {
+						t.equal(message.Body, "backoff");
 						attempts.push(attempt);
 						return attempt * 2;
 					},
@@ -693,16 +694,21 @@ test("sqs-consumer class", { only: true }, async (t) => {
 					endpoint: process.env.LOCALSTACK_ENDPOINT,
 				},
 			});
-			const sqsError = new Promise<Error>((resolve) => {
-				consumer.addHook("onSQSError", async (error: Error) => {
-					resolve(error);
-				});
+			const sqsError = new Promise<[Error, Message | undefined]>((resolve) => {
+				consumer.addHook(
+					"onSQSError",
+					async (error: Error, message?: Message) => {
+						resolve([error, message]);
+					},
+				);
 			});
 			t.teardown(async () => {
 				await teardownConsumer(consumer);
 			});
 
-			t.equal((await sqsError).message, "backoff-error");
+			const [error, errorMessage] = await sqsError;
+			t.equal(error.message, "backoff-error");
+			t.equal(errorMessage?.Body, "backoff-throws");
 			await completed;
 			t.equal(calls, 2);
 		},
@@ -806,7 +812,8 @@ test("sqs-consumer class", { only: true }, async (t) => {
 				},
 				consumerOptions: {
 					waitTimeSeconds: 1,
-					maxReceiveCount: (attempt) => {
+					maxReceiveCount: (attempt, message) => {
+						t.equal(message.Body, "max-receive-keep");
 						attempts.push(attempt);
 						return 2;
 					},
@@ -861,16 +868,21 @@ test("sqs-consumer class", { only: true }, async (t) => {
 					endpoint: process.env.LOCALSTACK_ENDPOINT,
 				},
 			});
-			const sqsError = new Promise<Error>((resolve) => {
-				consumer.addHook("onSQSError", async (error: Error) => {
-					resolve(error);
-				});
+			const sqsError = new Promise<[Error, Message | undefined]>((resolve) => {
+				consumer.addHook(
+					"onSQSError",
+					async (error: Error, message?: Message) => {
+						resolve([error, message]);
+					},
+				);
 			});
 			t.teardown(async () => {
 				await teardownConsumer(consumer);
 			});
 
-			t.equal((await sqsError).message, "max-receive-error");
+			const [error, errorMessage] = await sqsError;
+			t.equal(error.message, "max-receive-error");
+			t.equal(errorMessage?.Body, "max-receive-throws");
 			await completed;
 			t.equal(calls, 2);
 		},
