@@ -35,8 +35,8 @@ type ConsumerOptions = {
 	messageAttributeNames?: string[];
 	attributeNames?: string[];
 	errorDelaySeconds?: number;
-	errorDelayBackoff?: (attempt: number) => number;
-	maxReceiveCount?: number | ((attempt: number) => number);
+	errorDelayBackoff?: (attempt: number, message: Message) => number;
+	maxReceiveCount?: number | ((attempt: number, message: Message) => number);
 };
 
 type ConsumerHookName = Exclude<HookName, "onStart" | "onStop">;
@@ -62,10 +62,8 @@ export class SQSConsumer {
 	private readonly clientOptions: Pick<ClientOptions, "destroySigner">;
 	private readonly consumerOptions: Required<
 		Omit<ConsumerOptions, "errorDelayBackoff" | "maxReceiveCount">
-	> & {
-		errorDelayBackoff?: (attempt: number) => number;
-		maxReceiveCount?: number | ((attempt: number) => number);
-	};
+	> &
+		Pick<ConsumerOptions, "errorDelayBackoff" | "maxReceiveCount">;
 	private readonly sqsClient: MiniSQSClient;
 	private readonly hooks: Hooks;
 	private readonly messageHandler: (message: Message) => Promise<unknown>;
@@ -243,7 +241,7 @@ export class SQSConsumer {
 						if (
 							receiveCount >=
 							(typeof maxReceiveCount === "function"
-								? maxReceiveCount(receiveCount)
+								? maxReceiveCount(receiveCount, result.message)
 								: maxReceiveCount)
 						) {
 							const toDelete = await this.hooks.runHook(
@@ -258,7 +256,7 @@ export class SQSConsumer {
 							}
 						}
 					} catch (e) {
-						await this.hooks.runHook("onSQSError", e as Error);
+						await this.hooks.runHook("onSQSError", e as Error, result.message);
 					}
 				}
 				if (this.consumerOptions.errorDelayBackoff) {
@@ -266,9 +264,10 @@ export class SQSConsumer {
 						delaySeconds = this.consumerOptions.errorDelayBackoff(
 							/* c8 ignore next 1 */
 							Number(result.message.Attributes?.ApproximateReceiveCount ?? 0),
+							result.message,
 						);
 					} catch (e) {
-						await this.hooks.runHook("onSQSError", e as Error);
+						await this.hooks.runHook("onSQSError", e as Error, result.message);
 					}
 				}
 
